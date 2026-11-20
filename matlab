@@ -1,318 +1,411 @@
+function braille_gui()
 %% =====================================================================
-%  INTERFAZ MATLAB - SISTEMA BIDIRECCIONAL TEXTO <-> BRAILLE (DE10-Lite)
+%  PANTALLA MATLAB - SISTEMA BIDIRECCIONAL TEXTO <-> BRAILLE (DE10-Lite)
 %
-%  Comunicacion: UART 9600 8N1 via FT232RL (o HC-05 por Bluetooth: solo
-%  cambia el puerto COM). Todas las lineas terminan en '\n'.
+%  Toda la logica esta en la FPGA. El modo se elige SOLO con los
+%  switches de la tarjeta:
+%     SW1 SW0 = 00 reposo, 01 lectura, 10 escritura, 11 practica
+%     SW2     = pista en practica (letra visible en los servos)
 %
-%  PC -> FPGA:  R<texto> | W | P<c> | H<c> | N | S | C
-%  FPGA -> PC:  D<c> E | K<c> | T<c> O<c><hh><mm> X<c><hh><mm> N |
-%               S<hh><mm> | M<m> | !L !U !T
-%  (ver rtl/braille_controller.v para el detalle)
+%  Esta ventana solo:
+%     - escucha el puerto serial y muestra lo que reporta la FPGA,
+%     - lo dice en voz alta (Windows),
+%     - en modo lectura, envia la palabra que escribes,
+%     - en modo practica, le dice a la FPGA cuantas letras quieres
+%       (la FPGA elige las letras, compara, cuenta y termina la sesion).
+%
+%  Uso:  braille_gui     (MATLAB R2019b o mas nuevo, sin toolboxes)
+%  Protocolo: ver rtl/braille_controller.v
 %  =====================================================================
 
-clear; clc;
+    BAUD    = 9600;
+    MAX_LEN = 16;          % Debe coincidir con MAX_LEN en la FPGA
 
-PORT     = "COM11";   % Cambiar por el puerto del FT232RL / HC-05
-BAUD     = 9600;
-MAX_LEN  = 16;       % Debe coincidir con MAX_LEN en la FPGA
-USE_TTS  = true;     % Voz (solo Windows, System.Speech)
+    s      = [];           % serialport
+    rxbuf  = uint8([]);    % bytes recibidos sin procesar
+    synth  = [];           % voz
+    texto  = '';           % escritura
+    palabraW = '';
+    histAcc   = [];           % precision tras cada intento (practica)
+    modoAct   = 'I';          % modo que reporto la FPGA
+    nLetras   = 10;           % letras por sesion (lo cuenta la FPGA)
+    intentos  = 0;            % intentos hechos en la sesion
 
-s = serialport(PORT, BAUD);
-pause(2);
-flush(s);
+    % ---------------- Ventana ----------------
+    fig = uifigure('Name', 'Braille FPGA', 'Position', [100 80 900 640]);
+    fig.CloseRequestFcn = @cerrar;
 
-disp("Conexion UART iniciada.");
+    g = uigridlayout(fig, [4 1]);
+    g.RowHeight = {34, 50, '1x', 110};
 
-while true
+    % Fila 1: conexion
+    g1 = uigridlayout(g, [1 6]);
+    g1.ColumnWidth = {55, 110, 34, 100, '1x', 60};
+    g1.Padding = [0 0 0 0];
+    uilabel(g1, 'Text', 'Puerto:');
+    ddPort = uidropdown(g1, 'Items', listaPuertos());
+    uibutton(g1, 'Text', char(8635), 'Tooltip', 'Actualizar puertos', ...
+             'ButtonPushedFcn', @(~, ~) set(ddPort, 'Items', listaPuertos()));
+    btnCon = uibutton(g1, 'Text', 'Conectar', 'ButtonPushedFcn', @conectar);
+    lblEst = uilabel(g1, 'Text', 'Desconectado', 'FontColor', [0.75 0 0]);
+    chkVoz = uicheckbox(g1, 'Text', 'Voz', 'Value', true);
 
-    fprintf("\n========== MENU ==========\n");
-    fprintf(" 1) Lectura   (PC -> celda Braille)\n");
-    fprintf(" 2) Escritura (teclado Braille -> PC)\n");
-    fprintf(" 3) Practica  (aciertos / errores)\n");
-    fprintf(" 4) Ver marcador de la FPGA\n");
-    fprintf(" 5) Borrar marcador\n");
-    fprintf(" 0) Salir\n");
-    op = input("Opcion: ");
+    % Fila 2: modo actual (lo decide la tarjeta)
+    lblModo = uilabel(g, 'Text', 'MODO: -   (se elige con SW1-SW0 en la tarjeta)', ...
+                      'FontSize', 24, 'FontWeight', 'bold', ...
+                      'HorizontalAlignment', 'center');
 
-    switch op
-        case 1, modo_lectura(s, MAX_LEN, USE_TTS);
-        case 2, modo_escritura(s, USE_TTS);
-        case 3, modo_practica(s, USE_TTS);
-        case 4
-            fpga_send(s, "S");
-            m = fpga_wait(s, 'S', 2);
-            if ~isempty(m), mostrar_marcador(m); end
-        case 5
-            fpga_send(s, "C");
-            fpga_wait(s, 'S', 2);
-            disp("Marcador borrado.");
-        case 0
-            break;
+    % Fila 3: un panel por modo, en la misma celda
+    area = uigridlayout(g, [1 1]);
+    area.Padding = [0 0 0 0];
+
+    % --- Reposo ---
+    pI = uipanel(area, 'BorderType', 'none');
+    gI = uigridlayout(pI, [1 1]);
+    uilabel(gI, 'Text', sprintf(['Mueve los switches de la tarjeta:\n\n' ...
+        'SW1 SW0 = 01  ->  Lectura\nSW1 SW0 = 10  ->  Escritura\n' ...
+        'SW1 SW0 = 11  ->  Practica   (SW2 = pista)']), ...
+        'FontSize', 20, 'HorizontalAlignment', 'center');
+
+    % --- Lectura ---
+    pR = uipanel(area, 'BorderType', 'none');
+    pR.Layout.Row = 1; pR.Layout.Column = 1;
+    gR = uigridlayout(pR, [3 2]);
+    gR.RowHeight   = {34, '1x', 30};
+    gR.ColumnWidth = {'1x', 150};
+    edPal = uieditfield(gR, 'text', 'Placeholder', 'Palabra a mostrar (max 16)', ...
+                        'FontSize', 16);
+    uibutton(gR, 'Text', 'Enviar palabra', 'ButtonPushedFcn', @enviarPalabra);
+    lblLetra = uilabel(gR, 'Text', '-', 'FontSize', 150, 'FontWeight', 'bold', ...
+                       'HorizontalAlignment', 'center');
+    lblLetra.Layout.Row = 2; lblLetra.Layout.Column = [1 2];
+    lblProg = uilabel(gR, 'Text', 'Escribe una palabra. Avanza con KEY1 (NEXT) en la tarjeta.', ...
+                      'FontSize', 15, 'HorizontalAlignment', 'center');
+    lblProg.Layout.Row = 3; lblProg.Layout.Column = [1 2];
+
+    % --- Escritura ---
+    pW = uipanel(area, 'BorderType', 'none');
+    pW.Layout.Row = 1; pW.Layout.Column = 1;
+    gW = uigridlayout(pW, [2 3]);
+    gW.RowHeight   = {'1x', 34};
+    gW.ColumnWidth = {'1x', 140, 110};
+    taTexto = uitextarea(gW, 'Editable', 'off', 'FontSize', 34, 'Value', {''});
+    taTexto.Layout.Row = 1; taTexto.Layout.Column = [1 3];
+    lblUlt = uilabel(gW, 'Text', 'Escribe en el teclado Braille. KEY1 (NEXT) = espacio', ...
+                     'FontSize', 15);
+    uibutton(gW, 'Text', 'Leer en voz alta', 'ButtonPushedFcn', @(~, ~) hablar(texto));
+    uibutton(gW, 'Text', 'Borrar', 'ButtonPushedFcn', @borrarTexto);
+
+    % --- Practica ---
+    pP = uipanel(area, 'BorderType', 'none');
+    pP.Layout.Row = 1; pP.Layout.Column = 1;
+    gP = uigridlayout(pP, [4 2]);
+    gP.RowHeight   = {32, 30, '1x', 34};
+    gP.ColumnWidth = {'1x', '1x'};
+    gN = uigridlayout(gP, [1 3]);
+    gN.ColumnWidth = {'fit', 70, '1x'}; gN.Padding = [0 0 0 0];
+    uilabel(gN, 'Text', 'Letras por sesion:', 'FontSize', 15);
+    spnN = uispinner(gN, 'Limits', [0 99], 'Value', 10, 'FontSize', 15, ...
+                     'RoundFractionalValues', 'on', 'ValueChangedFcn', @cambiarN);
+    uilabel(gN, 'Text', '(0 = sin limite)', 'FontColor', [0.4 0.4 0.4]);
+    lblRes = uilabel(gP, 'Text', 'La FPGA elige la letra. KEY1 (NEXT) = saltar. SW2 = pista', ...
+                     'FontSize', 15, 'HorizontalAlignment', 'center');
+    lblRes.Layout.Row = 2; lblRes.Layout.Column = 1;
+    ax = uiaxes(gP);
+    ax.Layout.Row = [1 4]; ax.Layout.Column = 2;
+    title(ax, 'Precision acumulada'); ylabel(ax, '%'); xlabel(ax, 'Intento');
+    ylim(ax, [0 100]); grid(ax, 'on');
+    lblObj = uilabel(gP, 'Text', '-', 'FontSize', 150, 'FontWeight', 'bold', ...
+                     'HorizontalAlignment', 'center');
+    lblObj.Layout.Row = 3; lblObj.Layout.Column = 1;
+    lblStats = uilabel(gP, 'Text', 'Aciertos: 0   Errores: 0   Precision: 0 %', ...
+                       'FontSize', 17, 'FontWeight', 'bold', 'HorizontalAlignment', 'center');
+    lblStats.Layout.Row = 4; lblStats.Layout.Column = 1;
+
+    % Fila 4: registro
+    taLog = uitextarea(g, 'Editable', 'off', 'FontName', 'Consolas', 'Value', {''});
+
+    mostrarModo('I');
+    registrar('Selecciona el puerto y presiona Conectar.');
+
+
+    %% =================================================================
+    %  CONEXION Y RECEPCION
+    %  =================================================================
+    function lst = listaPuertos()
+        lst = cellstr(serialportlist("available"));
+        if isempty(lst), lst = {'COM5'}; end
     end
 
-end
-
-clear s;
-disp("Fin.");
-
-
-%% =====================================================================
-%  MODO A: LECTURA
-%  =====================================================================
-function modo_lectura(s, MAX_LEN, USE_TTS)
-
-    palabra = input("Palabra a mostrar: ", "s");
-    if isempty(palabra), return; end
-    if strlength(palabra) > MAX_LEN
-        fprintf("Maximo %d caracteres.\n", MAX_LEN);
-        return;
-    end
-
-    hablar(USE_TTS, palabra);
-    fpga_send(s, "R" + palabra);
-    disp("Presione NEXT en la tarjeta para avanzar.");
-
-    n = 0;
-    while true
-        m = fpga_read(s, 120);
-        if isempty(m)
-            disp("Tiempo agotado.");
+    function conectar(~, ~)
+        if ~isempty(s)                       % desconectar
+            configureCallback(s, "off");
+            delete(s); s = [];
+            btnCon.Text = 'Conectar';
+            lblEst.Text = 'Desconectado'; lblEst.FontColor = [0.75 0 0];
+            registrar('Desconectado.');
             return;
         end
-        switch char(m(1))
-            case 'D'
-                n = n + 1;
-                fprintf("Mostrando '%s'  (%d/%d)\n", char(m(2)), n, strlength(palabra));
-            case 'E'
-                disp("Fin de la palabra.");
-                return;
-            case '!'
-                mostrar_error(m);
-                return;
-            otherwise
-                mostrar_otro(m);
-        end
-    end
-
-end
-
-
-%% =====================================================================
-%  MODO B: ESCRITURA
-%  NEXT = espacio. Dos espacios seguidos terminan la sesion.
-%  =====================================================================
-function modo_escritura(s, USE_TTS)
-
-    fpga_send(s, "W");
-    fpga_wait(s, 'M', 2);
-
-    disp("Escriba con el teclado Braille.");
-    disp("NEXT = espacio; NEXT dos veces = terminar.");
-
-    texto   = '';
-    palabra = '';
-
-    while true
-        m = fpga_read(s, 120);
-        if isempty(m)
-            disp("Sin actividad, fin de la sesion.");
-            break;
-        end
-        if char(m(1)) ~= 'K'
-            mostrar_otro(m);
-            continue;
-        end
-
-        c = char(m(2));
-
-        if c == ' '
-            if isempty(palabra)          % segundo espacio seguido
-                break;
-            end
-            hablar(USE_TTS, palabra);
-            texto   = [texto palabra ' ']; %#ok<AGROW>
-            palabra = '';
-        elseif c == '?'
-            beep;
-            disp("  (patron no reconocido)");
-            continue;
-        else
-            palabra = [palabra c]; %#ok<AGROW>
-        end
-
-        fprintf("Texto: %s%s\n", texto, palabra);
-    end
-
-    texto = strtrim([texto palabra]);
-    fprintf("\nTexto final: %s\n", texto);
-    hablar(USE_TTS, texto);
-
-end
-
-
-%% =====================================================================
-%  MODO C: PRACTICA
-%  =====================================================================
-function modo_practica(s, USE_TTS)
-
-    rondas = input("Numero de letras: ");
-    pista  = input("Mostrar la letra en la celda como pista? (s/n): ", "s");
-    cmd    = "P";
-    if lower(pista) == "s", cmd = "H"; end
-
-    letras    = 'a':'z';
-    objetivo  = blanks(rondas);
-    tecleado  = blanks(rondas);
-    resultado = nan(1, rondas);      % 1 acierto, 0 error, NaN saltada
-
-    for k = 1:rondas
-
-        c = letras(randi(numel(letras)));
-        objetivo(k) = c;
-
-        fpga_send(s, cmd + string(c));
-        if isempty(fpga_wait(s, 'T', 2))
-            disp("La FPGA no acepto el objetivo.");
+        try
+            s = serialport(ddPort.Value, BAUD);
+        catch err
+            s = [];
+            uialert(fig, err.message, 'No se pudo abrir el puerto');
             return;
         end
+        configureTerminator(s, "LF");
+        flush(s);
+        rxbuf = uint8([]);
+        configureCallback(s, "terminator", @alRecibir);
+        btnCon.Text = 'Desconectar';
+        lblEst.Text = ['Conectado ' ddPort.Value]; lblEst.FontColor = [0 0.5 0];
+        registrar(['Conectado a ' ddPort.Value '.']);
+        enviar("Q");                         % la FPGA responde con su modo
+    end
 
-        fprintf("\n[%d/%d] Escriba la letra '%s'\n", k, rondas, upper(c));
-        hablar(USE_TTS, "Letra " + c);
+    function enviar(txt)
+        if isempty(s)
+            registrar('No conectado.');
+            return;
+        end
+        write(s, [uint8(char(txt)) 10], "uint8");
+    end
 
+    % Se ejecuta cuando llega un '\n' desde la FPGA
+    function alRecibir(src, ~)
+        n = src.NumBytesAvailable;
+        if n == 0, return; end
+        rxbuf = [rxbuf reshape(read(src, n, "uint8"), 1, [])];
         while true
-            m = fpga_read(s, 120);
-            if isempty(m)
-                disp("Tiempo agotado.");
-                break;
-            end
-            tipo = char(m(1));
-            if tipo == 'O' || tipo == 'X'
-                tecleado(k)  = char(m(2));
-                resultado(k) = (tipo == 'O');
-                if resultado(k)
-                    disp("  Correcto!");
-                    hablar(USE_TTS, "Correcto");
-                else
-                    fprintf("  Incorrecto: escribio '%s'\n", tecleado(k));
-                    hablar(USE_TTS, "Incorrecto");
+            k = find(rxbuf == 10, 1);
+            if isempty(k), break; end
+            linea = rxbuf(1:k-1);
+            rxbuf(1:k) = [];
+            if ~isempty(linea), procesar(linea); end
+        end
+    end
+
+
+    %% =================================================================
+    %  MENSAJES DE LA FPGA (solo se muestran)
+    %  =================================================================
+    function procesar(m)
+        c2 = ' ';
+        if numel(m) >= 2, c2 = char(m(2)); end
+
+        switch char(m(1))
+
+            case 'M'                                     % modo (switches)
+                mostrarModo(c2);
+                registrar(['La tarjeta esta en modo ' nombreModo(c2)]);
+                hablar(['Modo ' lower(nombreModo(c2))]);
+                if c2 == 'P'
+                    enviarN();          % sesion nueva: decirle cuantas letras
                 end
-                mostrar_marcador(m(2:end));
-                break;
-            elseif tipo == 'N'
-                disp("  Letra saltada.");
-                break;
-            else
-                mostrar_otro(m);
-            end
-        end
 
+            case 'D'                                     % lectura
+                lblLetra.Text = upper(c2);
+                lblProg.Text  = 'Avanza con KEY1 (NEXT) en la tarjeta.';
+                hablar(c2);
+
+            case 'E'
+                lblLetra.Text = '-';
+                lblProg.Text  = 'Fin de la palabra. Escribe otra.';
+                registrar('Fin de la palabra.');
+
+            case 'K'                                     % escritura
+                letraEscrita(c2);
+
+            case 'T'                                     % practica: letra nueva
+                lblObj.Text = upper(c2);
+                lblObj.FontColor = [0 0 0];
+                if nLetras > 0
+                    lblRes.Text = sprintf('Letra %d de %d: escribela en el teclado', ...
+                                          intentos + 1, nLetras);
+                else
+                    lblRes.Text = 'Escribe esta letra en el teclado Braille';
+                end
+                hablar(['Letra ' c2]);
+
+            case {'O', 'X'}                              % practica: resultado
+                ok = (m(1) == 'O');
+                h  = hex2dec(char(m(3:4)));
+                e  = hex2dec(char(m(5:6)));
+                acc = 100 * h / max(1, h + e);
+                intentos = h + e;
+                histAcc(end + 1) = acc;
+                if ok
+                    lblObj.FontColor = [0 0.6 0];
+                    lblRes.Text = 'Correcto!';
+                    hablar('Correcto');
+                else
+                    lblObj.FontColor = [0.8 0 0];
+                    lblRes.Text = sprintf('Incorrecto: escribiste %s', upper(c2));
+                    hablar('Incorrecto');
+                end
+                lblStats.Text = sprintf('Aciertos: %d   Errores: %d   Precision: %.0f %%', h, e, acc);
+                plot(ax, 1:numel(histAcc), histAcc, '-o', 'LineWidth', 1.5);
+                ylim(ax, [0 100]); grid(ax, 'on');
+                registrar(sprintf('%s  (aciertos %d, errores %d)', lblRes.Text, h, e));
+
+            case 'F'                                     % practica: fin de sesion
+                h   = hex2dec(char(m(2:3)));
+                e   = hex2dec(char(m(4:5)));
+                acc = 100 * h / max(1, h + e);
+                lblObj.Text = char(10003);
+                lblObj.FontColor = [0 0.4 0.8];
+                lblRes.Text = 'Sesion terminada.  KEY1 (NEXT) = otra sesion';
+                lblStats.Text = sprintf('FINAL  -  Aciertos: %d   Errores: %d   Precision: %.0f %%', h, e, acc);
+                registrar(sprintf('Sesion terminada: aciertos %d, errores %d, precision %.0f %%', h, e, acc));
+                hablar(sprintf('Practica terminada. %d aciertos, %d errores. Precision %.0f por ciento', h, e, acc));
+
+            case 'L'                                     % letras por sesion
+                nLetras = hex2dec(char(m(2:3)));
+                if nLetras == 0
+                    registrar('Practica sin limite de letras.');
+                else
+                    registrar(sprintf('La FPGA hara %d letras por sesion.', nLetras));
+                end
+
+            case 'S'
+                if numel(m) >= 5
+                    registrar(sprintf('Marcador FPGA: aciertos %d, errores %d', ...
+                        hex2dec(char(m(2:3))), hex2dec(char(m(4:5)))));
+                end
+
+            case '!'
+                switch c2
+                    case 'L', registrar('Error: palabra demasiado larga.');
+                    case 'M', registrar('Pon la tarjeta en modo lectura (SW1 SW0 = 01).');
+                    otherwise, registrar(['Error: ' char(m)]);
+                end
+
+            otherwise
+                registrar(['Mensaje: ' char(m)]);
+        end
     end
 
-    % ---- Resumen ----
-    validas = ~isnan(resultado);
-    aciertos = sum(resultado(validas));
-    errores  = sum(validas) - aciertos;
-    precision = 100 * aciertos / max(1, sum(validas));
+    % Muestra el panel del modo que reporto la FPGA
+    function mostrarModo(m)
+        modoAct = m;
+        pI.Visible = (m == 'I');
+        pR.Visible = (m == 'R');
+        pW.Visible = (m == 'W');
+        pP.Visible = (m == 'P');
+        lblModo.Text = ['MODO: ' nombreModo(m)];
+        switch m
+            case 'R'
+                lblLetra.Text = '-';
+            case 'P'                                    % la FPGA borra el marcador
+                histAcc = [];
+                intentos = 0;
+                cla(ax); ylim(ax, [0 100]); grid(ax, 'on');
+                lblObj.Text = '-';
+                lblStats.Text = 'Aciertos: 0   Errores: 0   Precision: 0 %';
+        end
+    end
 
-    fprintf("\nAciertos: %d   Errores: %d   Precision: %.1f %%\n", ...
-            aciertos, errores, precision);
-    hablar(USE_TTS, sprintf("Precision %.0f por ciento", precision));
-
-    figure("Name", "Practica Braille");
-    subplot(1, 2, 1);
-    bar([aciertos errores]);
-    set(gca, "XTickLabel", {"Aciertos", "Errores"});
-    title("Resultado de la sesion");
-
-    subplot(1, 2, 2);
-    r = resultado;
-    r(isnan(r)) = 0;
-    plot(1:rondas, 100 * cumsum(r) ./ (1:rondas), "-o");
-    ylim([0 100]); grid on;
-    xlabel("Intento"); ylabel("Precision acumulada (%)");
-    title("Progreso");
-
-end
+    function n = nombreModo(m)
+        switch m
+            case 'R', n = 'LECTURA';
+            case 'W', n = 'ESCRITURA';
+            case 'P', n = 'PRACTICA';
+            otherwise, n = 'REPOSO';
+        end
+    end
 
 
-%% =====================================================================
-%  COMUNICACION
-%  =====================================================================
+    %% =================================================================
+    %  PRACTICA: MATLAB solo le dice a la FPGA cuantas letras
+    %  =================================================================
+    function enviarN()
+        nLetras = spnN.Value;
+        enviar("L" + string(spnN.Value));
+    end
 
-% Envia un comando terminado en '\n' (bytes crudos, admite la n con tilde)
-function fpga_send(s, txt)
-    write(s, [uint8(char(txt)) 10], "uint8");
-end
+    % Si cambias el numero durante la practica, se aplica de inmediato;
+    % si no, se manda al entrar al modo practica.
+    function cambiarN(~, ~)
+        if ~isempty(s) && modoAct == 'P'
+            enviarN();
+        end
+    end
 
-% Lee una linea (sin el '\n') como vector uint8. [] si hay timeout.
-function m = fpga_read(s, timeout)
-    m = uint8([]);
-    t0 = tic;
-    while toc(t0) < timeout
-        if s.NumBytesAvailable > 0
-            b = read(s, 1, "uint8");
-            if b == 10
-                if ~isempty(m), return; end
-            else
-                m(end + 1) = b; %#ok<AGROW>
-            end
+
+    %% =================================================================
+    %  LECTURA: lo unico que MATLAB envia es la palabra
+    %  =================================================================
+    function enviarPalabra(~, ~)
+        w = strtrim(edPal.Value);
+        if isempty(w), return; end
+        if numel(w) > MAX_LEN
+            uialert(fig, sprintf('Maximo %d caracteres.', MAX_LEN), 'Palabra muy larga');
+            return;
+        end
+        registrar(['Enviando palabra: ' w]);
+        hablar(w);
+        enviar("R" + string(w));
+    end
+
+
+    %% =================================================================
+    %  ESCRITURA: solo se muestra lo que decodifico la FPGA
+    %  =================================================================
+    function letraEscrita(c)
+        if c == '?'
+            beep;
+            lblUlt.Text = 'Patron no reconocido';
+            return;
+        end
+        if c == ' '
+            if ~isempty(palabraW), hablar(palabraW); end
+            palabraW = '';
+            lblUlt.Text = 'Espacio';
         else
-            pause(0.005);
+            palabraW = [palabraW c];
+            lblUlt.Text = ['Ultima letra: ' upper(c)];
+            hablar(c);
+        end
+        texto = [texto c];
+        taTexto.Value = {texto};
+    end
+
+    function borrarTexto(~, ~)
+        texto = ''; palabraW = '';
+        taTexto.Value = {''};
+    end
+
+
+    %% =================================================================
+    %  UTILIDADES
+    %  =================================================================
+    function registrar(txt)
+        linea = sprintf('[%s] %s', char(datetime('now', 'Format', 'HH:mm:ss')), txt);
+        v = [{linea}; taLog.Value(:)];
+        taLog.Value = v(1:min(end, 200));
+    end
+
+    % Voz con .NET (Windows); asincrona para no congelar la ventana
+    function hablar(txt)
+        if ~chkVoz.Value || isempty(txt), return; end
+        try
+            if isempty(synth)
+                NET.addAssembly('System.Speech');
+                synth = System.Speech.Synthesis.SpeechSynthesizer;
+            end
+            synth.SpeakAsyncCancelAll();
+            synth.SpeakAsync(char(txt));
+        catch
+            % Sin voz disponible
         end
     end
-    m = uint8([]);
-end
 
-% Espera una respuesta que empiece con 'tipo'. Muestra las demas.
-function m = fpga_wait(s, tipo, timeout)
-    t0 = tic;
-    while toc(t0) < timeout
-        m = fpga_read(s, timeout - toc(t0));
-        if isempty(m), break; end
-        if char(m(1)) == tipo, return; end
-        mostrar_otro(m);
-    end
-    m = uint8([]);
-end
-
-function mostrar_marcador(m)
-    % m = 'S' u otro encabezado + 4 digitos hex al final
-    h = hex2dec(char(m(end-3:end-2)));
-    e = hex2dec(char(m(end-1:end)));
-    fprintf("  Marcador FPGA -> aciertos: %d  errores: %d\n", h, e);
-end
-
-function mostrar_error(m)
-    switch char(m(2))
-        case 'L', disp("Error: palabra demasiado larga.");
-        case 'U', disp("Error: comando o caracter no soportado.");
-        case 'T', disp("Error: no hay letra objetivo.");
-        otherwise, fprintf("Error: %s\n", char(m));
-    end
-end
-
-function mostrar_otro(m)
-    switch char(m(1))
-        case 'M'
-            fprintf("(La tarjeta cambio a modo %s)\n", char(m(2)));
-        case '!'
-            mostrar_error(m);
-        otherwise
-            fprintf("(Mensaje: %s)\n", char(m));
-    end
-end
-
-% Texto a voz con .NET (Windows). En otros sistemas solo imprime.
-function hablar(usar, txt)
-    persistent sintetizador
-    if ~usar, return; end
-    try
-        if isempty(sintetizador)
-            NET.addAssembly("System.Speech");
-            sintetizador = System.Speech.Synthesis.SpeechSynthesizer;
+    function cerrar(~, ~)
+        if ~isempty(s)
+            try, configureCallback(s, "off"); catch, end
+            delete(s);
         end
-        Speak(sintetizador, char(txt));
-    catch
-        % Sin voz disponible: no hacer nada
+        delete(fig);
     end
+
 end

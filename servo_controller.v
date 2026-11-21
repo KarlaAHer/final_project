@@ -22,10 +22,12 @@
 
 module servo_controller #(
     parameter PERIOD        = 1000000,   // 20 ms
-    parameter PULSE_DOWN_L  = 70000,     // 1.400 ms
-    parameter PULSE_UP_L    = 83056,     // 1.661 ms
-    parameter PULSE_DOWN_R  = 80000,     // 1.600 ms (espejo de 1.400)
-    parameter PULSE_UP_R    = 66944,     // 1.339 ms (espejo de 1.661)
+        // Servos izquierda (puntos 1,2,3) y derecha (4,5,6, en espejo)
+    // (arriba/abajo intercambiados: los puntos bajaban en vez de subir)
+    parameter PULSE_DOWN_L   = 82000,     // 1.64 ms  izquierda abajo
+    parameter PULSE_UP_L     = 70000,     // 1.40 ms  izquierda arriba
+    parameter PULSE_DOWN_R   = 60000,     // 1.20 ms  derecha abajo
+    parameter PULSE_UP_R     = 80000,     // 1.60 ms  derecha arriba
     parameter COUNTER_WIDTH = 20
 )(
     input  wire       clk,

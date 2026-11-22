@@ -8,8 +8,9 @@
 // Entradas fisicas:
 //   KEY[0]  reset (activo en bajo)
 //   KEY[1]  NEXT (boton de la tarjeta, activo en bajo)
-//   SW[1:0] selector de modo: 00 = PC, 01 = lectura,
+//   SW[1:0] selector de modo: 00 = reposo, 01 = lectura,
 //           10 = escritura, 11 = practica
+//   SW[2]   pista en practica (1 = mostrar la letra en los servos)
 //   DOT_N[5:0] botones externos de los puntos 1..6 (a GND,
 //           con pull-up; DOT_N[0] = punto 1)
 //
@@ -17,7 +18,7 @@
 //   SERVO[5:0] PWM de los puntos 1..6 (SERVO[0] = punto 1)
 //   LEDR[5:0]  patron en la celda (escritura: ultimo acorde)
 //   LEDR[7:6]  modo, LEDR[8] NEXT presionado, LEDR[9] TX activo
-//   HEX5 modo (1/2/3), HEX3-HEX2 aciertos, HEX1-HEX0 errores (hex)
+//   HEX5 modo (0/1/2/3), HEX3-HEX2 aciertos, HEX1-HEX0 errores (hex)
 //====================================================
 
 module braille_top #(
@@ -25,18 +26,23 @@ module braille_top #(
     parameter DEBOUNCE_COUNT = 500000,    // 10 ms
     parameter DEB_WIDTH      = 19,
     parameter SERVO_PERIOD   = 1000000,   // 20 ms
-       // Servos izquierda (puntos 1,2,3) y derecha (4,5,6, en espejo)
-    parameter PULSE_DOWN_L   = 70000,     // 1.400 ms
-    parameter PULSE_UP_L     = 83056,     // 1.661 ms (+2 grados)
-    parameter PULSE_DOWN_R   = 80000,     // 1.600 ms = 150000 - 70000
-    parameter PULSE_UP_R     = 66944,     // 1.339 ms = 150000 - 83056
+    // Servos izquierda (puntos 1,2,3) y derecha (4,5,6, en espejo)
+    // Valores calibrados con servo_cal_top
+    // Abajo = posicion calibrada; arriba = mismo recorrido que en la
+    // calibracion pero en el sentido contrario (izq -12000, der +20000)
+    parameter PULSE_DOWN_L   = 70000,     // 1.40 ms  izquierda abajo (reposo)
+    parameter PULSE_UP_L     = 58000,     // 1.16 ms  izquierda arriba
+    parameter PULSE_DOWN_R   = 80000,     // 1.60 ms  derecha abajo (reposo)
+    parameter PULSE_UP_R     = 100000,    // 2.00 ms  derecha arriba
     parameter SERVO_WIDTH    = 20,
     parameter MAX_LEN        = 16,
-    parameter AW             = 4
+    parameter AW             = 4,
+    parameter FEEDBACK_DELAY = 100000000, // 2 s mostrando la respuesta
+    parameter FB_WIDTH       = 27
 )(
     input  wire       CLOCK_50,
     input  wire [1:0] KEY,
-    input  wire [1:0] SW,
+    input  wire [2:0] SW,
 
     input  wire       UART_RX,
     output wire       UART_TX,
@@ -142,18 +148,18 @@ module braille_top #(
 
 
     //====================================================
-    // SELECTOR DE MODO (sincronizado)
+    // SWITCHES: MODO (SW1..SW0) Y PISTA (SW2), sincronizados
     //====================================================
 
-    reg [1:0] sw_s1, sw_s2;
+    reg [2:0] sw_s1, sw_s2;
 
     always @(posedge clk or posedge rst) begin
         if (rst) begin
-            sw_s1 <= 2'b00;
-            sw_s2 <= 2'b00;
+            sw_s1 <= 3'b000;
+            sw_s2 <= 3'b000;
         end
         else begin
-            sw_s1 <= SW[1:0];
+            sw_s1 <= SW;
             sw_s2 <= sw_s1;
         end
     end
@@ -173,7 +179,12 @@ module braille_top #(
     wire [7:0]  hits;
     wire [7:0]  misses;
 
-    braille_controller #(.MAX_LEN(MAX_LEN), .AW(AW)) CTRL0 (
+    braille_controller #(
+        .MAX_LEN       (MAX_LEN),
+        .AW            (AW),
+        .FEEDBACK_DELAY(FEEDBACK_DELAY),
+        .FB_WIDTH      (FB_WIDTH)
+    ) CTRL0 (
         .clk         (clk),
         .rst         (rst),
         .line_ready  (line_ready),
@@ -186,7 +197,8 @@ module braille_top #(
         .chord_valid (chord_valid),
         .chord       (chord),
         .next_pulse  (btn_pulse[6]),
-        .sw_mode     (sw_s2),
+        .sw_mode     (sw_s2[1:0]),
+        .sw_hint     (sw_s2[2]),
         .msg_busy    (msg_busy),
         .msg_start   (msg_start),
         .msg_len     (msg_len),
@@ -218,7 +230,7 @@ module braille_top #(
     // SERVOS (un contador compartido para los 6 canales)
     //====================================================
 
-      servo_controller #(
+    servo_controller #(
         .PERIOD       (SERVO_PERIOD),
         .PULSE_DOWN_L (PULSE_DOWN_L),
         .PULSE_UP_L   (PULSE_UP_L),

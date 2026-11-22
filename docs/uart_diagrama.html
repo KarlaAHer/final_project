@@ -1,0 +1,482 @@
+<title>UART del Braille FPGA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: hoja de datos técnica — diagrama de bloques al frente, luego trama del byte, módulos, protocolo y capacidad */
+:root{
+  --bg:#f5f7f8; --panel:#ffffff; --fg:#17212b; --muted:#5a6773; --line:#c9d2d9; --grid:#e3e8ec;
+  --rx:#0b7a75; --rx-soft:#dff2f0; --tx:#b4530b; --tx-soft:#fcecdd;
+  --mem:#5b4bb7; --mem-soft:#ebe8fa; --ctrl:#24384d; --ctrl-soft:#e4eaf0;
+  --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f151b; --panel:#161f27; --fg:#e4eaef; --muted:#93a1ad; --line:#33414d; --grid:#222d37;
+  --rx:#3cc4bb; --rx-soft:#12302f; --tx:#f19a4f; --tx-soft:#36230f;
+  --mem:#a99bf5; --mem-soft:#251f45; --ctrl:#b9c9d9; --ctrl-soft:#1f2b37; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f151b; --panel:#161f27; --fg:#e4eaef; --muted:#93a1ad; --line:#33414d; --grid:#222d37;
+  --rx:#3cc4bb; --rx-soft:#12302f; --tx:#f19a4f; --tx-soft:#36230f;
+  --mem:#a99bf5; --mem-soft:#251f45; --ctrl:#b9c9d9; --ctrl-soft:#1f2b37; color-scheme:dark}
+
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.55}
+.wrap{max-width:1180px;margin:0 auto;padding-block:32px 64px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:44px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(28px,4.4vw,44px);font-weight:800;letter-spacing:-.01em}
+h2{font-size:24px;font-weight:700}
+h3{font-size:17px;font-weight:700}
+p{margin:0;max-width:68ch}
+code,.mono{font-family:var(--f-mono);font-size:.92em}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+section{display:flex;flex-direction:column;gap:16px}
+.lead{color:var(--muted);font-size:17px}
+
+/* ficha */
+.spec{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.spec div{background:var(--panel);padding:14px 16px;display:flex;flex-direction:column;gap:2px}
+.spec b{font-family:var(--f-mono);font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.spec span{font-size:13px;color:var(--muted)}
+
+/* diagramas */
+.fig{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow-x:auto}
+.fig svg{display:block;width:100%;min-width:900px;height:auto}
+.fig.frame svg{min-width:760px}
+svg text{font-family:var(--f-body);fill:var(--fg)}
+svg .t-title{font-family:var(--f-display);font-weight:700;font-size:17px}
+svg .t-sub{font-size:12.5px;fill:var(--muted)}
+svg .t-sig{font-family:var(--f-mono);font-size:12px}
+svg .t-pin{font-family:var(--f-mono);font-size:12px;font-weight:600}
+svg .b-ext{fill:var(--grid);stroke:var(--line);stroke-width:1.5}
+svg .b-rx{fill:var(--rx-soft);stroke:var(--rx);stroke-width:2}
+svg .b-tx{fill:var(--tx-soft);stroke:var(--tx);stroke-width:2}
+svg .b-tx-in{fill:var(--panel);stroke:var(--tx);stroke-width:1.5;stroke-dasharray:5 3}
+svg .b-mem{fill:var(--mem-soft);stroke:var(--mem);stroke-width:2}
+svg .b-ctrl{fill:var(--ctrl-soft);stroke:var(--ctrl);stroke-width:2}
+svg .fpga{fill:none;stroke:var(--muted);stroke-width:1.5;stroke-dasharray:8 5}
+svg .a-rx{stroke:var(--rx);stroke-width:2.2;fill:none}
+svg .a-tx{stroke:var(--tx);stroke-width:2.2;fill:none}
+svg .a-mem{stroke:var(--mem);stroke-width:2.2;fill:none}
+svg .m-rx{fill:var(--rx)} svg .m-tx{fill:var(--tx)} svg .m-mem{fill:var(--mem)}
+svg .c-rx{fill:var(--rx)} svg .c-tx{fill:var(--tx)} svg .c-mem{fill:var(--mem)}
+svg .bgchip{fill:var(--panel)}
+svg .wave{stroke:var(--rx);stroke-width:3;fill:none;stroke-linejoin:round}
+svg .slot{stroke:var(--grid);stroke-width:1}
+svg .sample{stroke:var(--tx);stroke-width:1.3;stroke-dasharray:3 3}
+svg .dot{fill:var(--tx)}
+svg .hl-start{fill:var(--tx-soft)} svg .hl-stop{fill:var(--rx-soft)}
+svg .dim{fill:var(--muted)}
+
+.legend{display:flex;flex-wrap:wrap;gap:10px 22px;font-size:13.5px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend i{width:22px;height:4px;border-radius:2px;display:inline-block}
+
+/* tarjetas de módulos */
+.mods{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.mod{background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--c);border-radius:6px;padding:18px 20px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.mod.rx{--c:var(--rx)} .mod.tx{--c:var(--tx)} .mod.mem{--c:var(--mem)} .mod.ctrl{--c:var(--ctrl)}
+.mod header{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.mod h3{font-family:var(--f-mono);font-weight:600;font-size:16px}
+.tag{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--c);border:1px solid var(--c);border-radius:3px;padding:1px 6px}
+.mod p{font-size:14.5px}
+.mod dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0;font-size:13.5px}
+.mod dt{color:var(--muted)}
+.mod dd{margin:0;min-width:0}
+.fsm{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-family:var(--f-mono);font-size:12px}
+.fsm b{font-weight:500;border:1px solid var(--c);color:var(--c);border-radius:999px;padding:2px 9px}
+.fsm em{font-style:normal;color:var(--muted)}
+
+/* tablas */
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+th,td{text-align:left;padding:9px 14px;border-bottom:1px solid var(--grid);vertical-align:top}
+th{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500;background:var(--bg)}
+tr:last-child td{border-bottom:0}
+td code{white-space:nowrap}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:16px}
+.two>div{display:flex;flex-direction:column;gap:10px;min-width:0}
+.dir{font-family:var(--f-mono);font-size:13px;font-weight:600}
+.dir.rx{color:var(--rx)} .dir.tx{color:var(--tx)}
+
+/* secuencia */
+.seq{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px clamp(12px,3vw,28px);display:grid;grid-template-columns:1fr minmax(140px,1.2fr) 1fr;gap:8px 12px;align-items:center;font-size:14px}
+.seq .hd{font-family:var(--f-display);font-weight:700;font-size:15px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.seq .hd.r{text-align:right}
+.seq .msg{font-family:var(--f-mono);font-size:13px;padding:5px 10px;border-radius:4px;white-space:nowrap;text-align:center}
+.seq .msg.out{background:var(--rx-soft);color:var(--rx)}
+.seq .msg.in{background:var(--tx-soft);color:var(--tx)}
+.seq .note{color:var(--muted);font-size:13px;min-width:0}
+.seq .note.r{text-align:right}
+.seq .ev{grid-column:1/-1;font-family:var(--f-mono);font-size:12px;color:var(--muted);text-align:center;border-top:1px dashed var(--line);padding-top:6px}
+
+.callout{border-left:3px solid var(--tx);background:var(--tx-soft);padding:12px 16px;border-radius:0 6px 6px 0;font-size:14.5px}
+.callout.rx{border-color:var(--rx);background:var(--rx-soft)}
+ol.flow{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px;max-width:80ch}
+@media (max-width:520px){.seq{grid-template-columns:1fr 1.3fr 1fr;font-size:13px}.seq .msg{font-size:12px;padding:4px 6px}}
+</style>
+
+<div class="wrap">
+
+<header style="display:flex;flex-direction:column;gap:12px">
+  <div class="eyebrow">Proyecto Braille · DE10-Lite · Comunicación serie</div>
+  <h1>Cómo viaja la información por la UART</h1>
+  <p class="lead">Dos cables independientes conectan la PC con la FPGA. Por <b style="color:var(--rx)">UART_RX</b> llegan comandos de texto, que se guardan y se interpretan. Por <b style="color:var(--tx)">UART_TX</b> salen las respuestas. Cada módulo hace una sola parte de ese recorrido.</p>
+</header>
+
+<section>
+  <div class="spec">
+    <div><b>9600</b><span>baudios (bits por segundo)</span></div>
+    <div><b>8N1</b><span>8 datos, sin paridad, 1 stop</span></div>
+    <div><b>5208</b><span>ciclos de 50 MHz por bit</span></div>
+    <div><b>1.04 ms</b><span>por byte (10 bits)</span></div>
+    <div><b>960</b><span>bytes por segundo, máximo</span></div>
+    <div><b>16</b><span>caracteres por palabra (MAX_LEN)</span></div>
+    <div><b>6 + \n</b><span>bytes por mensaje de la FPGA</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">1 · Diagrama de bloques</div>
+  <h2>Quién habla con quién</h2>
+  <div class="fig">
+  <svg viewBox="0 0 1200 600" role="img" aria-label="Diagrama de bloques de la ruta UART del proyecto">
+    <defs>
+      <marker id="arx" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="m-rx"/></marker>
+      <marker id="atx" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="m-tx"/></marker>
+      <marker id="amem" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="m-mem"/></marker>
+    </defs>
+
+    <!-- frontera FPGA -->
+    <rect x="345" y="40" width="835" height="540" rx="10" class="fpga"/>
+    <text x="365" y="68" class="t-sub" style="font-family:var(--f-mono)">FPGA · braille_top.v · reloj 50 MHz</text>
+
+    <!-- PC -->
+    <rect x="20" y="110" width="150" height="430" rx="8" class="b-ext"/>
+    <text x="95" y="300" text-anchor="middle" class="t-title">PC</text>
+    <text x="95" y="322" text-anchor="middle" class="t-sub">MATLAB</text>
+    <text x="95" y="340" text-anchor="middle" class="t-sub" style="font-family:var(--f-mono)">braille_gui</text>
+
+    <!-- FT232RL -->
+    <rect x="200" y="110" width="115" height="430" rx="8" class="b-ext"/>
+    <text x="257" y="300" text-anchor="middle" class="t-title" style="font-size:15px">FT232RL</text>
+    <text x="257" y="320" text-anchor="middle" class="t-sub">o HC-05</text>
+    <text x="257" y="338" text-anchor="middle" class="t-sub">USB ↔ serie</text>
+
+    <!-- PC <-> FT -->
+    <line x1="170" y1="160" x2="198" y2="160" class="a-rx" marker-end="url(#arx)"/>
+    <line x1="200" y1="491" x2="172" y2="491" class="a-tx" marker-end="url(#atx)"/>
+    <text x="185" y="148" text-anchor="middle" class="t-sub" style="font-size:11px">USB</text>
+    <text x="185" y="511" text-anchor="middle" class="t-sub" style="font-size:11px">USB</text>
+
+    <!-- pin RX -->
+    <line x1="315" y1="160" x2="368" y2="160" class="a-rx" marker-end="url(#arx)"/>
+    <rect x="309" y="134" width="72" height="18" rx="3" class="bgchip"/>
+    <text x="345" y="147" text-anchor="middle" class="t-pin c-rx">UART_RX</text>
+
+    <!-- uart_rx -->
+    <rect x="370" y="110" width="165" height="100" rx="8" class="b-rx"/>
+    <text x="452" y="145" text-anchor="middle" class="t-title" style="font-family:var(--f-mono);font-size:16px">uart_rx</text>
+    <text x="452" y="167" text-anchor="middle" class="t-sub">bits → 1 byte</text>
+    <text x="452" y="185" text-anchor="middle" class="t-sub">sincroniza y muestrea</text>
+
+    <!-- uart_rx -> line_rx -->
+    <line x1="535" y1="160" x2="638" y2="160" class="a-rx" marker-end="url(#arx)"/>
+    <text x="587" y="137" text-anchor="middle" class="t-sig">rx_byte[8]</text>
+    <text x="587" y="152" text-anchor="middle" class="t-sig">rx_ready</text>
+
+    <!-- line_rx -->
+    <rect x="640" y="110" width="170" height="100" rx="8" class="b-rx"/>
+    <text x="725" y="145" text-anchor="middle" class="t-title" style="font-family:var(--f-mono);font-size:16px">line_rx</text>
+    <text x="725" y="167" text-anchor="middle" class="t-sub">bytes → 1 línea</text>
+    <text x="725" y="185" text-anchor="middle" class="t-sub">comando + datos + \n</text>
+
+    <!-- line_rx <-> controller -->
+    <line x1="810" y1="140" x2="978" y2="140" class="a-rx" marker-end="url(#arx)"/>
+    <text x="894" y="130" text-anchor="middle" class="t-sig">line_ready · cmd</text>
+    <text x="894" y="157" text-anchor="middle" class="t-sig">len · overflow</text>
+    <line x1="980" y1="190" x2="812" y2="190" class="a-rx" marker-end="url(#arx)" style="stroke-dasharray:6 4"/>
+    <text x="894" y="182" text-anchor="middle" class="t-sig">line_ack</text>
+
+    <!-- line_rx -> char_buffer -->
+    <line x1="700" y1="210" x2="700" y2="278" class="a-mem" marker-end="url(#amem)"/>
+    <text x="712" y="236" class="t-sig c-mem">buf_we</text>
+    <text x="712" y="251" class="t-sig c-mem">buf_waddr</text>
+    <text x="712" y="266" class="t-sig c-mem">buf_wdata</text>
+
+    <!-- char_buffer -->
+    <rect x="640" y="280" width="170" height="90" rx="8" class="b-mem"/>
+    <text x="725" y="313" text-anchor="middle" class="t-title" style="font-family:var(--f-mono);font-size:16px">char_buffer</text>
+    <text x="725" y="335" text-anchor="middle" class="t-sub">16 casillas × 8 bits</text>
+    <text x="725" y="353" text-anchor="middle" class="t-sub">guarda la palabra</text>
+
+    <!-- char_buffer <-> controller -->
+    <line x1="980" y1="305" x2="812" y2="305" class="a-mem" marker-end="url(#amem)"/>
+    <text x="894" y="297" text-anchor="middle" class="t-sig c-mem">buf_raddr</text>
+    <line x1="810" y1="345" x2="978" y2="345" class="a-mem" marker-end="url(#amem)"/>
+    <text x="894" y="337" text-anchor="middle" class="t-sig c-mem">buf_rdata</text>
+
+    <!-- controller -->
+    <rect x="980" y="110" width="180" height="430" rx="8" class="b-ctrl"/>
+    <text x="1070" y="260" text-anchor="middle" class="t-title" style="font-family:var(--f-mono);font-size:15px">braille_</text>
+    <text x="1070" y="280" text-anchor="middle" class="t-title" style="font-family:var(--f-mono);font-size:15px">controller</text>
+    <text x="1070" y="306" text-anchor="middle" class="t-sub">interpreta comandos</text>
+    <text x="1070" y="324" text-anchor="middle" class="t-sub">decide la respuesta</text>
+    <text x="1070" y="352" text-anchor="middle" class="t-sig dim">IDLE → CMD</text>
+    <text x="1070" y="368" text-anchor="middle" class="t-sig dim">→ SEND → GAP</text>
+    <text x="1070" y="408" text-anchor="middle" class="t-sub" style="font-size:11.5px">también maneja servos,</text>
+    <text x="1070" y="423" text-anchor="middle" class="t-sub" style="font-size:11.5px">botones y displays</text>
+
+    <!-- controller -> msg_tx -->
+    <line x1="980" y1="450" x2="812" y2="450" class="a-tx" marker-end="url(#atx)"/>
+    <text x="894" y="428" text-anchor="middle" class="t-sig">msg_start · msg_len</text>
+    <text x="894" y="442" text-anchor="middle" class="t-sig">msg_data[48]</text>
+    <line x1="810" y1="515" x2="978" y2="515" class="a-tx" marker-end="url(#atx)" style="stroke-dasharray:6 4"/>
+    <text x="894" y="507" text-anchor="middle" class="t-sig">msg_busy</text>
+
+    <!-- msg_tx (contiene uart_tx) -->
+    <rect x="490" y="410" width="320" height="140" rx="8" class="b-tx"/>
+    <text x="506" y="434" class="t-title" style="font-family:var(--f-mono);font-size:16px">msg_tx</text>
+    <text x="700" y="468" text-anchor="middle" class="t-sub">mensaje → bytes</text>
+    <text x="700" y="486" text-anchor="middle" class="t-sub">1 a 6 bytes</text>
+    <text x="700" y="504" text-anchor="middle" class="t-sub">y agrega '\n'</text>
+    <rect x="510" y="452" width="125" height="80" rx="6" class="b-tx-in"/>
+    <text x="572" y="484" text-anchor="middle" class="t-title" style="font-family:var(--f-mono);font-size:14px">uart_tx</text>
+    <text x="572" y="503" text-anchor="middle" class="t-sub">byte → bits</text>
+
+    <!-- pin TX -->
+    <line x1="510" y1="491" x2="317" y2="491" class="a-tx" marker-end="url(#atx)"/>
+    <rect x="309" y="465" width="72" height="18" rx="3" class="bgchip"/>
+    <text x="345" y="478" text-anchor="middle" class="t-pin c-tx">UART_TX</text>
+    <text x="440" y="483" text-anchor="middle" class="t-sig dim">tx</text>
+  </svg>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--rx)"></i>Entrada: PC → FPGA</span>
+    <span><i style="background:var(--tx)"></i>Salida: FPGA → PC</span>
+    <span><i style="background:var(--mem)"></i>Memoria de la palabra</span>
+    <span><i style="background:repeating-linear-gradient(90deg,var(--muted) 0 6px,transparent 6px 10px)"></i>Señal de respuesta (handshake)</span>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">2 · Lo que viaja por el cable</div>
+  <h2>Anatomía de un byte: la letra «h»</h2>
+  <p>La línea descansa en 1. Para mandar un byte se baja a 0 (START), se envían los 8 bits empezando por el menos significativo y se vuelve a 1 (STOP). La «h» es <code>0x68 = 0110 1000</code>, así que sale al revés: <code>0 0 0 1 0 1 1 0</code>.</p>
+  <div class="fig frame">
+  <svg viewBox="0 0 960 250" role="img" aria-label="Forma de onda de la letra h en UART 8N1">
+    <rect x="130" y="40" width="70" height="100" class="hl-start"/>
+    <rect x="760" y="40" width="70" height="100" class="hl-stop"/>
+    <g class="slot">
+      <line x1="130" y1="40" x2="130" y2="150"/><line x1="200" y1="40" x2="200" y2="150"/>
+      <line x1="270" y1="40" x2="270" y2="150"/><line x1="340" y1="40" x2="340" y2="150"/>
+      <line x1="410" y1="40" x2="410" y2="150"/><line x1="480" y1="40" x2="480" y2="150"/>
+      <line x1="550" y1="40" x2="550" y2="150"/><line x1="620" y1="40" x2="620" y2="150"/>
+      <line x1="690" y1="40" x2="690" y2="150"/><line x1="760" y1="40" x2="760" y2="150"/>
+      <line x1="830" y1="40" x2="830" y2="150"/>
+    </g>
+    <text x="40" y="65" class="t-sig dim">1</text>
+    <text x="40" y="125" class="t-sig dim">0</text>
+    <path class="wave" d="M60 60 H130 V120 H410 V60 H480 V120 H550 V60 H690 V120 H760 V60 H900"/>
+    <g class="sample">
+      <line x1="165" y1="40" x2="165" y2="140"/>
+      <line x1="235" y1="40" x2="235" y2="140"/><line x1="305" y1="40" x2="305" y2="140"/>
+      <line x1="375" y1="40" x2="375" y2="140"/><line x1="445" y1="40" x2="445" y2="140"/>
+      <line x1="515" y1="40" x2="515" y2="140"/><line x1="585" y1="40" x2="585" y2="140"/>
+      <line x1="655" y1="40" x2="655" y2="140"/><line x1="725" y1="40" x2="725" y2="140"/>
+      <line x1="795" y1="40" x2="795" y2="140"/>
+    </g>
+    <g class="dot">
+      <circle cx="165" cy="120" r="4"/><circle cx="235" cy="120" r="4"/><circle cx="305" cy="120" r="4"/>
+      <circle cx="375" cy="120" r="4"/><circle cx="445" cy="60" r="4"/><circle cx="515" cy="120" r="4"/>
+      <circle cx="585" cy="60" r="4"/><circle cx="655" cy="60" r="4"/><circle cx="725" cy="120" r="4"/>
+      <circle cx="795" cy="60" r="4"/>
+    </g>
+    <g class="t-sig" text-anchor="middle">
+      <text x="95" y="170" class="dim">reposo</text><text x="165" y="170" class="c-tx">START</text>
+      <text x="235" y="170">D0</text><text x="305" y="170">D1</text><text x="375" y="170">D2</text>
+      <text x="445" y="170">D3</text><text x="515" y="170">D4</text><text x="585" y="170">D5</text>
+      <text x="655" y="170">D6</text><text x="725" y="170">D7</text>
+      <text x="795" y="170" class="c-rx">STOP</text><text x="865" y="170" class="dim">reposo</text>
+    </g>
+    <g class="t-sig dim" text-anchor="middle" style="font-size:11px">
+      <text x="235" y="30">0</text><text x="305" y="30">0</text><text x="375" y="30">0</text><text x="445" y="30">1</text>
+      <text x="515" y="30">0</text><text x="585" y="30">1</text><text x="655" y="30">1</text><text x="725" y="30">0</text>
+    </g>
+    <path d="M200 195 v8 H270 v-8" fill="none" stroke="var(--muted)" stroke-width="1.3"/>
+    <text x="235" y="222" text-anchor="middle" class="t-sub">1 bit = 5208 ciclos = 104 µs</text>
+    <path d="M130 195 v8 H830 v-8" fill="none" stroke="var(--muted)" stroke-width="1.3" style="opacity:.5"/>
+    <text x="560" y="222" text-anchor="middle" class="t-sub">1 byte = 10 bits = 1.04 ms</text>
+    <circle cx="700" cy="238" r="4" class="dot"/>
+    <text x="710" y="242" class="t-sub">uart_rx lee cada bit a la mitad, donde la señal ya es estable</text>
+  </svg>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">3 · Responsabilidades</div>
+  <h2>Qué hace cada módulo</h2>
+  <div class="mods">
+
+    <article class="mod rx">
+      <header><h3>uart_rx.v</h3><span class="tag">capa física</span></header>
+      <p>Convierte los bits que llegan por el pin en un byte completo. No sabe nada de comandos.</p>
+      <div class="fsm"><b>IDLE</b><em>→</em><b>START</b><em>→</em><b>DATA ×8</b><em>→</em><b>STOP</b></div>
+      <dl>
+        <dt>Entrada</dt><dd>pin <code>rx</code></dd>
+        <dt>Salida</dt><dd><code>data_out[8]</code> y <code>data_ready</code> (pulso de 1 ciclo)</dd>
+        <dt>Clave</dt><dd>2 flip-flops sincronizan el pin. Revisa START a media celda (2604 ciclos) para descartar ruido y luego muestrea cada 5208 ciclos.</dd>
+        <dt>Capacidad</dt><dd>1 byte a la vez, sin FIFO. Si el STOP no vale 1, el byte se descarta.</dd>
+      </dl>
+    </article>
+
+    <article class="mod rx">
+      <header><h3>line_rx.v</h3><span class="tag">enmarcado</span></header>
+      <p>Junta bytes hasta encontrar <code>\n</code> o <code>\r</code>. El primer byte es el comando y el resto son datos.</p>
+      <dl>
+        <dt>Entrada</dt><dd><code>rx_data</code>, <code>rx_valid</code>, <code>ack</code></dd>
+        <dt>Salida</dt><dd><code>cmd</code>, <code>len</code>, <code>overflow</code>, <code>line_ready</code> y el puerto de escritura del buffer</dd>
+        <dt>Clave</dt><dd>Solo los datos de <code>R</code> y <code>L</code> se guardan. Mantiene <code>line_ready = 1</code> hasta recibir <code>ack</code>, y mientras tanto ignora los bytes nuevos.</dd>
+        <dt>Capacidad</dt><dd>16 datos por línea. Del 17 en adelante activa <code>overflow</code> y la FPGA responde <code>!L</code>. Las líneas vacías se ignoran.</dd>
+      </dl>
+    </article>
+
+    <article class="mod mem">
+      <header><h3>char_buffer.sv</h3><span class="tag">memoria</span></header>
+      <p>Guarda la palabra para que el controlador la muestre letra por letra con NEXT.</p>
+      <dl>
+        <dt>Escribe</dt><dd><code>line_rx</code>, con reloj</dd>
+        <dt>Lee</dt><dd><code>braille_controller</code>, sin reloj (el dato sale en el mismo ciclo)</dd>
+        <dt>Capacidad</dt><dd>16 × 8 bits = 128 bits, hechos con flip-flops</dd>
+      </dl>
+    </article>
+
+    <article class="mod ctrl">
+      <header><h3>braille_controller.v</h3><span class="tag">protocolo</span></header>
+      <p>Lee la línea terminada, ejecuta el comando y prepara la respuesta. Es el único que entiende el significado de las letras del protocolo.</p>
+      <div class="fsm" style="--c:var(--ctrl)"><b>IDLE</b><em>→</em><b>CMD</b><em>→</em><b>SEND</b><em>→</em><b>GAP</b><em>→</em><b>IDLE</b></div>
+      <dl>
+        <dt>Recibe</dt><dd><code>line_ready</code>, <code>cmd</code>, <code>len</code>, <code>overflow</code> y <code>buf_rdata</code></dd>
+        <dt>Envía</dt><dd><code>line_ack</code>, <code>buf_raddr</code>, <code>msg_start</code>, <code>msg_len</code> y <code>msg_data</code></dd>
+        <dt>Clave</dt><dd>En SEND espera a que <code>msg_busy = 0</code>. GAP deja pasar un ciclo para que <code>busy</code> alcance a subir.</dd>
+      </dl>
+    </article>
+
+    <article class="mod tx">
+      <header><h3>msg_tx.v</h3><span class="tag">enmarcado</span></header>
+      <p>Recibe un mensaje de hasta 6 bytes y los manda uno por uno a <code>uart_tx</code>. Al final agrega <code>\n</code>.</p>
+      <div class="fsm"><b>IDLE</b><em>→</em><b>SEND</b><em>⇄</em><b>WAIT</b><em>→</em><b>IDLE</b></div>
+      <dl>
+        <dt>Entrada</dt><dd><code>start</code>, <code>msg_len[3]</code>, <code>msg_data[48]</code></dd>
+        <dt>Salida</dt><dd>pin <code>tx</code> y <code>busy</code></dd>
+        <dt>Clave</dt><dd>Primero sale el byte 0, que está en <code>msg_data[7:0]</code>. Copia el mensaje al empezar, así el controlador puede preparar el siguiente mientras tanto.</dd>
+        <dt>Capacidad</dt><dd>48 bits = 6 bytes, más <code>\n</code>. Un mensaje completo tarda unos 7.3 ms.</dd>
+      </dl>
+    </article>
+
+    <article class="mod tx">
+      <header><h3>uart_tx.v</h3><span class="tag">capa física</span></header>
+      <p>Hace lo contrario de <code>uart_rx</code>: toma un byte y lo saca bit por bit con START y STOP. Vive dentro de <code>msg_tx</code>.</p>
+      <div class="fsm"><b>IDLE</b><em>→</em><b>START</b><em>→</em><b>DATA ×8</b><em>→</em><b>STOP</b></div>
+      <dl>
+        <dt>Entrada</dt><dd><code>data_in[8]</code>, <code>tx_start</code></dd>
+        <dt>Salida</dt><dd><code>tx</code>, <code>tx_busy</code> y <code>tx_done</code> (pulso)</dd>
+        <dt>Clave</dt><dd>En reposo la línea queda en 1. Con <code>tx_done</code> avisa a <code>msg_tx</code> que ya puede mandar el siguiente byte.</dd>
+      </dl>
+    </article>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">4 · El idioma que hablan</div>
+  <h2>Protocolo de comandos</h2>
+  <p>Todo es texto ASCII y cada línea termina en <code>\n</code>. La primera letra dice qué tipo de mensaje es. Los contadores viajan como dos dígitos hexadecimales.</p>
+  <div class="two">
+    <div>
+      <span class="dir rx">PC → FPGA</span>
+      <div class="tbl"><table>
+        <thead><tr><th>Línea</th><th>Significado</th><th>Respuesta</th></tr></thead>
+        <tbody>
+          <tr><td><code>R&lt;texto&gt;</code></td><td>Carga una palabra (solo en modo lectura)</td><td><code>D&lt;c&gt;</code> o <code>!M</code> / <code>!L</code></td></tr>
+          <tr><td><code>L&lt;n&gt;</code></td><td>Letras por sesión de práctica, de 0 a 99 (0 = sin límite)</td><td><code>L&lt;hh&gt;</code></td></tr>
+          <tr><td><code>Q</code></td><td>Pregunta el modo actual</td><td><code>M&lt;m&gt;</code></td></tr>
+          <tr><td><code>S</code></td><td>Pregunta el marcador</td><td><code>S&lt;hh&gt;&lt;mm&gt;</code></td></tr>
+          <tr><td><code>C</code></td><td>Borra el marcador</td><td><code>S0000</code></td></tr>
+          <tr><td><code>N</code></td><td>Igual que presionar NEXT (para pruebas)</td><td>según el modo</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div>
+      <span class="dir tx">FPGA → PC</span>
+      <div class="tbl"><table>
+        <thead><tr><th>Línea</th><th>Cuándo se manda</th></tr></thead>
+        <tbody>
+          <tr><td><code>M&lt;m&gt;</code></td><td>Al mover los switches. m = I, R, W o P</td></tr>
+          <tr><td><code>D&lt;c&gt;</code> · <code>E</code></td><td>Lectura: letra mostrada · fin de palabra</td></tr>
+          <tr><td><code>K&lt;c&gt;</code></td><td>Escritura: letra tecleada (<code>?</code> = inválida, espacio = NEXT)</td></tr>
+          <tr><td><code>T&lt;c&gt;</code></td><td>Práctica: nueva letra objetivo</td></tr>
+          <tr><td><code>O&lt;c&gt;&lt;hh&gt;&lt;mm&gt;</code></td><td>Práctica: acierto, con aciertos y errores</td></tr>
+          <tr><td><code>X&lt;c&gt;&lt;hh&gt;&lt;mm&gt;</code></td><td>Práctica: error</td></tr>
+          <tr><td><code>F&lt;hh&gt;&lt;mm&gt;</code></td><td>Práctica: sesión terminada</td></tr>
+          <tr><td><code>!L</code> <code>!U</code> <code>!M</code></td><td>Palabra muy larga · comando desconocido · no está en modo lectura</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">5 · Un ejemplo de principio a fin</div>
+  <h2>Leer la palabra «hola»</h2>
+  <div class="seq">
+    <div class="hd">PC · MATLAB</div><div></div><div class="hd r">FPGA</div>
+    <div class="ev">SW1 SW0 = 01 en la tarjeta</div>
+    <div class="note">La ventana cambia a «Lectura»</div><div class="msg in">← MR\n</div><div class="note r">el controlador detecta el cambio de switches</div>
+    <div class="note">El usuario escribe «hola» y envía</div><div class="msg out">Rhola\n →</div><div class="note r">uart_rx → line_rx → 4 letras en char_buffer</div>
+    <div class="note">Dice «h» en voz alta</div><div class="msg in">← Dh\n</div><div class="note r">lee la casilla 0; los servos muestran la h</div>
+    <div class="ev">el usuario presiona NEXT</div>
+    <div class="note">Dice «o»</div><div class="msg in">← Do\n</div><div class="note r">char_idx = 1</div>
+    <div class="ev">NEXT · NEXT</div>
+    <div class="note">«l», «a»</div><div class="msg in">← Dl\n · Da\n</div><div class="note r">char_idx = 2, 3</div>
+    <div class="ev">NEXT</div>
+    <div class="note">Anuncia el fin de la palabra</div><div class="msg in">← E\n</div><div class="note r">celda neutra, word_len = 0</div>
+  </div>
+  <p class="mono" style="font-size:13px;color:var(--muted)">Ejemplo en práctica: <span style="color:var(--tx)">Ta</span> (objetivo «a») → el usuario teclea la a → <span style="color:var(--tx)">Oa0100</span> = acierto, tecleó «a», 01 aciertos, 00 errores.</p>
+</section>
+
+<section>
+  <div class="eyebrow">6 · Por qué no se pierden datos</div>
+  <h2>Los dos handshakes</h2>
+  <div class="two">
+    <div class="callout rx">
+      <b>Entrada: <code>line_ready</code> / <code>line_ack</code></b><br>
+      Cuando <code>line_rx</code> termina una línea, levanta <code>line_ready</code> y la deja arriba. El controlador la toma en IDLE y responde con <code>line_ack</code> para liberarla. Mientras <code>line_ready</code> sigue arriba, los bytes nuevos se descartan. Por eso MATLAB espera la respuesta antes de mandar el siguiente comando.
+    </div>
+    <div class="callout">
+      <b>Salida: <code>msg_start</code> / <code>msg_busy</code></b><br>
+      El controlador solo dispara <code>msg_start</code> cuando <code>msg_busy = 0</code>. <code>msg_tx</code> copia el mensaje en sus propios registros, así que el controlador puede volver a IDLE y atender botones mientras se transmite. Por dentro, <code>msg_tx</code> espera el <code>tx_done</code> de <code>uart_tx</code> antes de mandar cada byte.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">7 · Números</div>
+  <h2>Capacidad y límites</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Concepto</th><th>Valor</th><th>De dónde sale</th></tr></thead>
+    <tbody>
+      <tr><td>Ciclos por bit</td><td class="mono">5208</td><td>50 000 000 / 9600 = 5208.33. El error de 0.006 % es despreciable.</td></tr>
+      <tr><td>Contador <code>clk_count</code></td><td class="mono">13 bits</td><td>2¹³ = 8192, lo justo para contar hasta 5207</td></tr>
+      <tr><td>Tiempo por byte</td><td class="mono">1.042 ms</td><td>START + 8 datos + STOP = 10 bits × 104.2 µs</td></tr>
+      <tr><td>Línea más larga de la PC</td><td class="mono">18 bytes ≈ 18.8 ms</td><td><code>R</code> + 16 letras + <code>\n</code></td></tr>
+      <tr><td>Mensaje más largo de la FPGA</td><td class="mono">7 bytes ≈ 7.3 ms</td><td><code>O&lt;c&gt;&lt;hh&gt;&lt;mm&gt;</code> + <code>\n</code></td></tr>
+      <tr><td>Contadores en el protocolo</td><td class="mono">00 – FF</td><td>8 bits enviados como 2 dígitos hexadecimales</td></tr>
+      <tr><td>Caracteres que se muestran</td><td class="mono">a–z · A–Z · ñ · espacio</td><td>La ñ debe llegar en Latin-1 (<code>0xF1</code>), no en UTF-8</td></tr>
+      <tr><td>Dúplex</td><td class="mono">completo</td><td>RX y TX usan cables y máquinas separadas, así que pueden funcionar al mismo tiempo</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+</div>

@@ -1,0 +1,475 @@
+<title>Máquinas de estados de envío</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: tres máquinas de estados lado a lado + reproductor paso a paso con los registros de cada una */
+:root{
+  --bg:#f4f6f7; --panel:#ffffff; --fg:#18222c; --muted:#5b6874; --line:#cfd7dd; --soft:#e8edf0;
+  --ctrl:#2d4a66; --ctrl-soft:#e2ebf3; --msg:#b4530b; --msg-soft:#fcebdb; --utx:#8a3b9e; --utx-soft:#f4e6f7;
+  --rx:#0b7a75; --rx-soft:#ddf1ef;
+  --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f151b; --panel:#161f27; --fg:#e4eaef; --muted:#97a4b0; --line:#33414d; --soft:#1e2832;
+  --ctrl:#8fb6dc; --ctrl-soft:#1a2a3a; --msg:#f19a4f; --msg-soft:#36230f; --utx:#d59be4; --utx-soft:#2f1a36;
+  --rx:#3cc4bb; --rx-soft:#12302f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f151b; --panel:#161f27; --fg:#e4eaef; --muted:#97a4b0; --line:#33414d; --soft:#1e2832;
+  --ctrl:#8fb6dc; --ctrl-soft:#1a2a3a; --msg:#f19a4f; --msg-soft:#36230f; --utx:#d59be4; --utx-soft:#2f1a36;
+  --rx:#3cc4bb; --rx-soft:#12302f; color-scheme:dark}
+
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.6}
+.wrap{max-width:1240px;margin:0 auto;padding-block:32px 72px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:48px}
+h1,h2,h3,h4{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.2}
+h1{font-size:clamp(28px,4.6vw,44px);font-weight:800}
+h2{font-size:clamp(22px,3vw,28px);font-weight:800}
+h3{font-size:18px;font-weight:700}
+p{margin:0;max-width:72ch}
+code{font-family:var(--f-mono);font-size:.9em;background:var(--soft);padding:1px 5px;border-radius:3px}
+section{display:flex;flex-direction:column;gap:16px}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.lead{font-size:18px;color:var(--muted)}
+.c-ctrl{color:var(--ctrl)} .c-msg{color:var(--msg)} .c-utx{color:var(--utx)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--msg);outline-offset:2px}
+
+/* qué es una FSM */
+.fsm-intro{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.fsm-intro div{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.fsm-intro b{font-family:var(--f-display)}
+.fsm-intro span{font-size:14.5px;color:var(--muted)}
+
+/* diagrama */
+.fig{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow-x:auto}
+.fig svg{display:block;width:100%;min-width:980px;height:auto}
+svg text{font-family:var(--f-body);fill:var(--fg)}
+svg .col-t{font-family:var(--f-mono);font-weight:600;font-size:17px}
+svg .col-s{font-size:12.5px;fill:var(--muted)}
+svg .st rect{stroke-width:2.2;transition:fill .25s}
+svg .st text{font-family:var(--f-mono);font-weight:600;font-size:15px;text-anchor:middle;dominant-baseline:middle}
+svg .st.ctrl rect{fill:var(--ctrl-soft);stroke:var(--ctrl)} svg .st.ctrl.on rect{fill:var(--ctrl)} svg .st.ctrl.on text{fill:var(--panel)}
+svg .st.msg rect{fill:var(--msg-soft);stroke:var(--msg)} svg .st.msg.on rect{fill:var(--msg)} svg .st.msg.on text{fill:var(--panel)}
+svg .st.utx rect{fill:var(--utx-soft);stroke:var(--utx)} svg .st.utx.on rect{fill:var(--utx)} svg .st.utx.on text{fill:var(--panel)}
+svg .st.on rect{stroke-width:3}
+svg .ar{fill:none;stroke-width:1.8}
+svg .ar.ctrl{stroke:var(--ctrl)} svg .ar.msg{stroke:var(--msg)} svg .ar.utx{stroke:var(--utx)}
+svg .mk-ctrl{fill:var(--ctrl)} svg .mk-msg{fill:var(--msg)} svg .mk-utx{fill:var(--utx)}
+svg .lb{font-family:var(--f-mono);font-size:11.5px}
+svg .lb.dim{fill:var(--muted)}
+svg .sep{stroke:var(--line);stroke-width:1;stroke-dasharray:4 5}
+svg .init{fill:var(--fg)}
+
+.signals{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}
+.signals div{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 14px;font-size:14px;display:flex;flex-direction:column;gap:2px}
+.signals b{font-family:var(--f-mono);font-size:14px}
+.signals span{color:var(--muted)}
+
+/* reproductor */
+.player{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px clamp(14px,2.5vw,24px);display:flex;flex-direction:column;gap:16px}
+.pbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.pbar button{font:inherit;font-size:14px;cursor:pointer;border-radius:6px;padding:7px 13px;border:1px solid var(--line);background:var(--panel);color:var(--fg)}
+.pbar button.primary{background:var(--msg);border-color:var(--msg);color:var(--panel);font-weight:600}
+.pbar button:hover{border-color:var(--msg)}
+.pbar button:disabled{opacity:.45;cursor:default}
+.pbar .count{font-family:var(--f-mono);font-size:13px;color:var(--muted);margin-left:auto;font-variant-numeric:tabular-nums}
+.prog{height:6px;background:var(--soft);border-radius:3px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--msg);width:0;transition:width .25s}
+.narr{display:flex;flex-direction:column;gap:6px;min-height:96px}
+.narr h3{font-size:20px}
+.narr p{font-size:15.5px}
+.regs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:900px){.regs{grid-template-columns:1fr}}
+.reg{border:1px solid var(--line);border-top:4px solid var(--c);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.reg.ctrl{--c:var(--ctrl)} .reg.msg{--c:var(--msg)} .reg.utx{--c:var(--utx)}
+.reg header{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.reg h4{font-family:var(--f-mono);font-size:14.5px}
+.stp{font-family:var(--f-mono);font-size:12px;font-weight:600;color:var(--panel);background:var(--c);border-radius:999px;padding:1px 10px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-family:var(--f-mono);font-size:13px;font-variant-numeric:tabular-nums}
+.kv span{color:var(--muted)}
+.kv b{font-weight:500;min-width:0;overflow-wrap:anywhere}
+.kv b.hot{color:var(--c);font-weight:600}
+.bx{display:flex;gap:3px;flex-wrap:wrap}
+.bx span{font-family:var(--f-mono);font-size:13px;min-width:26px;text-align:center;border:1px solid var(--line);border-radius:4px;padding:2px 4px;background:var(--bg)}
+.bx span small{display:block;font-size:9.5px;color:var(--muted);line-height:1.1}
+.bx span.cur{border-color:var(--c);background:var(--c);color:var(--panel)}
+.bx span.cur small{color:var(--panel)}
+.bx span.zero{color:var(--muted)}
+.bits{display:flex;gap:2px;flex-wrap:wrap;font-family:var(--f-mono);font-size:12.5px}
+.bits span{border:1px solid var(--line);border-radius:3px;padding:1px 5px;min-width:20px;text-align:center}
+.bits span.s{border-color:var(--utx);color:var(--utx)}
+.wire{display:flex;flex-direction:column;gap:6px;border:1px dashed var(--line);border-radius:8px;padding:12px 14px}
+.wire .w{display:flex;gap:4px;flex-wrap:wrap;min-height:30px;align-items:center}
+.wire .w span{font-family:var(--f-mono);font-size:15px;font-weight:600;border:1px solid var(--rx);color:var(--rx);background:var(--rx-soft);border-radius:4px;padding:2px 9px}
+.wire .w em{font-style:normal;color:var(--muted);font-size:13.5px}
+
+/* tablas */
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:640px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--soft);vertical-align:top}
+th{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500;background:var(--bg)}
+tr:last-child td{border-bottom:0}
+td.k{font-family:var(--f-mono);font-weight:600;white-space:nowrap}
+.three{display:grid;grid-template-columns:1fr;gap:20px}
+
+/* conversión hits */
+.conv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:stretch}
+.conv div{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center}
+.conv b{font-family:var(--f-mono);font-size:20px}
+.conv span{font-size:13px;color:var(--muted)}
+.idea{border-left:4px solid var(--msg);background:var(--msg-soft);padding:12px 16px;border-radius:0 8px 8px 0;font-size:15px}
+@media (prefers-reduced-motion:reduce){svg .st rect,.prog i{transition:none}}
+</style>
+
+<div class="wrap">
+
+<header style="display:flex;flex-direction:column;gap:12px">
+  <div class="eyebrow">Proyecto Braille · DE10-Lite · Salida FPGA → PC</div>
+  <h1>Cómo sale un mensaje: las tres máquinas de estados</h1>
+  <p class="lead">Ejemplo real: estás en modo práctica, llevas 2 aciertos y 1 error, y tecleas bien la <b>m</b>. La FPGA tiene que mandarle <code>Om0301\n</code> a MATLAB. Tres máquinas de estados trabajan en cadena para lograrlo. Abajo puedes recorrerlo paso a paso.</p>
+</header>
+
+<section>
+  <div class="eyebrow">Antes de empezar</div>
+  <h2>¿Qué es una máquina de estados?</h2>
+  <div class="fsm-intro">
+    <div><b>Estado</b><span>El "paso" en el que está el circuito. Solo puede estar en uno a la vez. En el diagrama es una caja.</span></div>
+    <div><b>Transición</b><span>Una flecha. Indica a qué estado salta y bajo qué condición.</span></div>
+    <div><b>Condición / acción</b><span>En cada flecha, lo de arriba es <i>cuándo</i> salta y lo de abajo, <i>qué hace</i> al saltar (con <code>←</code> = se asigna).</span></div>
+    <div><b>Reloj</b><span>Las máquinas solo pueden cambiar de estado en un flanco del reloj de 50 MHz, o sea cada 20 ns.</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">1 · El diagrama</div>
+  <h2>Las tres máquinas, una al lado de otra</h2>
+  <p>De izquierda a derecha está la cadena: el <b class="c-ctrl">controller</b> decide qué decir, <b class="c-msg">msg_tx</b> reparte el mensaje en bytes y <b class="c-utx">uart_tx</b> saca cada byte bit por bit. Al usar el reproductor de abajo, los estados activos se iluminan aquí.</p>
+  <div class="fig">
+  <svg viewBox="0 0 1260 560" role="img" aria-label="Diagrama de estados de braille_controller, msg_tx y uart_tx">
+    <defs>
+      <marker id="mc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-ctrl"/></marker>
+      <marker id="mm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-msg"/></marker>
+      <marker id="mu" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-utx"/></marker>
+    </defs>
+    <line x1="420" y1="20" x2="420" y2="540" class="sep"/>
+    <line x1="840" y1="20" x2="840" y2="540" class="sep"/>
+
+    <!-- ===== CONTROLLER ===== -->
+    <text x="200" y="32" text-anchor="middle" class="col-t c-ctrl" style="fill:var(--ctrl)">braille_controller</text>
+    <text x="200" y="50" text-anchor="middle" class="col-s">decide QUÉ decir</text>
+    <circle cx="200" cy="72" r="5" class="init"/><line x1="200" y1="77" x2="200" y2="93" class="ar ctrl" marker-end="url(#mc)"/>
+    <g class="st ctrl" id="c-IDLE"><rect x="125" y="95" width="150" height="50" rx="25"/><text x="200" y="120">ST_IDLE</text></g>
+    <g class="st ctrl" id="c-SEND"><rect x="125" y="255" width="150" height="50" rx="25"/><text x="200" y="280">ST_SEND</text></g>
+    <g class="st ctrl" id="c-GAP"><rect x="125" y="415" width="150" height="50" rx="25"/><text x="200" y="440">ST_GAP</text></g>
+
+    <line x1="200" y1="145" x2="200" y2="253" class="ar ctrl" marker-end="url(#mc)"/>
+    <text x="212" y="178" class="lb">acierto o error</text>
+    <text x="212" y="194" class="lb dim">hits ← hits+1</text>
+    <text x="212" y="210" class="lb dim">msg_data ← "Om0301"</text>
+    <text x="212" y="226" class="lb dim">msg_len ← 6</text>
+
+    <path d="M275 270 C 330 252, 330 308, 275 290" class="ar ctrl" marker-end="url(#mc)"/>
+    <text x="334" y="276" class="lb">busy=1</text>
+    <text x="334" y="292" class="lb dim">espera</text>
+
+    <line x1="200" y1="305" x2="200" y2="413" class="ar ctrl" marker-end="url(#mc)"/>
+    <text x="212" y="350" class="lb">msg_busy = 0</text>
+    <text x="212" y="366" class="lb dim">msg_start ← 1</text>
+
+    <path d="M125 440 C 55 440, 55 120, 123 120" class="ar ctrl" marker-end="url(#mc)"/>
+    <text x="62" y="280" class="lb" text-anchor="middle" transform="rotate(-90 62 280)">1 ciclo · queda libre</text>
+
+    <text x="200" y="500" text-anchor="middle" class="lb dim">ST_CMD, ST_SHOW y ST_TARGET</text>
+    <text x="200" y="516" text-anchor="middle" class="lb dim">también terminan en ST_SEND</text>
+
+    <!-- ===== MSG_TX ===== -->
+    <text x="620" y="32" text-anchor="middle" class="col-t" style="fill:var(--msg)">msg_tx</text>
+    <text x="620" y="50" text-anchor="middle" class="col-s">reparte el mensaje en bytes</text>
+    <circle cx="620" cy="72" r="5" class="init"/><line x1="620" y1="77" x2="620" y2="93" class="ar msg" marker-end="url(#mm)"/>
+    <g class="st msg" id="m-IDLE"><rect x="545" y="95" width="150" height="50" rx="25"/><text x="620" y="120">IDLE</text></g>
+    <g class="st msg" id="m-SEND"><rect x="545" y="255" width="150" height="50" rx="25"/><text x="620" y="280">SEND</text></g>
+    <g class="st msg" id="m-WAIT"><rect x="545" y="415" width="150" height="50" rx="25"/><text x="620" y="440">WAIT</text></g>
+
+    <line x1="620" y1="145" x2="620" y2="253" class="ar msg" marker-end="url(#mm)"/>
+    <text x="632" y="178" class="lb">start = 1</text>
+    <text x="632" y="194" class="lb dim">data_reg ← msg_data</text>
+    <text x="632" y="210" class="lb dim">idx ← 0 · busy ← 1</text>
+
+    <line x1="620" y1="305" x2="620" y2="413" class="ar msg" marker-end="url(#mm)"/>
+    <text x="608" y="342" class="lb dim" text-anchor="end">uart_data ← byte idx</text>
+    <text x="608" y="358" class="lb dim" text-anchor="end">(\n al final)</text>
+    <text x="608" y="374" class="lb dim" text-anchor="end">uart_start ← 1</text>
+
+    <path d="M605 465 C 590 510, 650 510, 635 465" class="ar msg" marker-end="url(#mm)"/>
+    <text x="620" y="526" text-anchor="middle" class="lb">esperando uart_done</text>
+
+    <path d="M695 440 C 775 420, 775 300, 697 285" class="ar msg" marker-end="url(#mm)"/>
+    <text x="772" y="350" class="lb">uart_done</text>
+    <text x="772" y="366" class="lb">idx &lt; len</text>
+    <text x="772" y="382" class="lb dim">idx+1</text>
+
+    <path d="M545 440 C 440 440, 440 120, 543 120" class="ar msg" marker-end="url(#mm)"/>
+    <text x="452" y="280" class="lb" text-anchor="middle" transform="rotate(-90 452 280)">uart_done · idx = len · busy ← 0</text>
+
+    <!-- ===== UART_TX ===== -->
+    <text x="1040" y="32" text-anchor="middle" class="col-t" style="fill:var(--utx)">uart_tx</text>
+    <text x="1040" y="50" text-anchor="middle" class="col-s">saca 1 byte bit por bit</text>
+    <circle cx="1040" cy="62" r="5" class="init"/><line x1="1040" y1="67" x2="1040" y2="83" class="ar utx" marker-end="url(#mu)"/>
+    <g class="st utx" id="u-IDLE"><rect x="965" y="85" width="150" height="50" rx="25"/><text x="1040" y="110">IDLE</text></g>
+    <g class="st utx" id="u-START"><rect x="965" y="195" width="150" height="50" rx="25"/><text x="1040" y="220">START</text></g>
+    <g class="st utx" id="u-DATA"><rect x="965" y="305" width="150" height="50" rx="25"/><text x="1040" y="330">DATA</text></g>
+    <g class="st utx" id="u-STOP"><rect x="965" y="415" width="150" height="50" rx="25"/><text x="1040" y="440">STOP</text></g>
+
+    <line x1="1040" y1="135" x2="1040" y2="193" class="ar utx" marker-end="url(#mu)"/>
+    <text x="1052" y="160" class="lb">tx_start = 1</text>
+    <text x="1052" y="176" class="lb dim">tx_data ← byte</text>
+
+    <line x1="1040" y1="245" x2="1040" y2="303" class="ar utx" marker-end="url(#mu)"/>
+    <text x="1052" y="270" class="lb">5208 ciclos</text>
+    <text x="1052" y="286" class="lb dim">(tx = 0)</text>
+
+    <path d="M1115 320 C 1170 302, 1170 358, 1115 340" class="ar utx" marker-end="url(#mu)"/>
+    <text x="1174" y="326" class="lb">8 bits</text>
+    <text x="1174" y="342" class="lb dim">5208 c/u</text>
+
+    <line x1="1040" y1="355" x2="1040" y2="413" class="ar utx" marker-end="url(#mu)"/>
+    <text x="1052" y="380" class="lb">bit_index = 7</text>
+    <text x="1052" y="396" class="lb dim">ya van los 8</text>
+
+    <path d="M965 440 C 880 440, 880 110, 963 110" class="ar utx" marker-end="url(#mu)"/>
+    <text x="892" y="275" class="lb" text-anchor="middle" transform="rotate(-90 892 275)">5208 ciclos (tx = 1) · tx_done ← 1</text>
+  </svg>
+  </div>
+  <div class="signals">
+    <div><b class="c-ctrl">msg_start</b><span>controller → msg_tx: "manda este mensaje"</span></div>
+    <div><b class="c-msg">msg_busy</b><span>msg_tx → controller: "estoy ocupado, espera"</span></div>
+    <div><b class="c-msg">uart_start</b><span>msg_tx → uart_tx: "manda este byte"</span></div>
+    <div><b class="c-utx">uart_done</b><span>uart_tx → msg_tx: "ya terminé ese byte"</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">2 · Recórrelo</div>
+  <h2>Paso a paso: enviar <code>Om0301\n</code></h2>
+  <div class="player">
+    <div class="pbar">
+      <button id="bReset" type="button">⟲ Inicio</button>
+      <button id="bPrev" type="button">◀ Anterior</button>
+      <button id="bNext" type="button" class="primary">Siguiente ▶</button>
+      <button id="bByte" type="button">Saltar al siguiente byte ⏭</button>
+      <button id="bPlay" type="button">▶ Reproducir</button>
+      <span class="count" id="count"></span>
+    </div>
+    <div class="prog"><i id="prog"></i></div>
+    <div class="narr" aria-live="polite"><h3 id="nTitle"></h3><p id="nText"></p></div>
+    <div class="regs">
+      <div class="reg ctrl"><header><h4>braille_controller</h4><span class="stp" id="rcS"></span></header><div id="rc"></div></div>
+      <div class="reg msg"><header><h4>msg_tx</h4><span class="stp" id="rmS"></span></header><div id="rm"></div></div>
+      <div class="reg utx"><header><h4>uart_tx</h4><span class="stp" id="ruS"></span></header><div id="ru"></div></div>
+    </div>
+    <div class="wire">
+      <div class="eyebrow">Lo que ya llegó a MATLAB por el cable</div>
+      <div class="w" id="wire"></div>
+    </div>
+  </div>
+  <p style="font-size:14px;color:var(--muted)">También puedes usar las flechas ← → del teclado. Los tiempos son reales: cada byte tarda 1.04 ms, y el controller y msg_tx cambian de estado en nanosegundos.</p>
+</section>
+
+<section>
+  <div class="eyebrow">3 · El detalle del contador</div>
+  <h2>Dónde se parten los aciertos en dos caracteres</h2>
+  <p>La conversión <b>no es un estado</b>. Ocurre dentro de la flecha <code>ST_IDLE → ST_SEND</code> del controller, en el mismo ciclo, gracias a la función combinacional <code>hexc</code>. Así llegan los 3 aciertos al mensaje:</p>
+  <div class="conv">
+    <div><b>hits = 3</b><span>1 byte dentro de la FPGA</span></div>
+    <div><b>0000 0011</b><span>en binario (8 bits)</span></div>
+    <div><b>0000 | 0011</b><span>se parte en dos mitades de 4 bits</span></div>
+    <div><b>'0'  '3'</b><span>hexc(0) = 0x30 · hexc(3) = 0x33</span></div>
+    <div><b>bytes 2 y 3</b><span>de msg_data, listos para salir</span></div>
+  </div>
+  <div class="idea">Por eso el controller no necesita estados extra para convertir números: cuando entra a <code>ST_SEND</code>, los 6 caracteres ya están armados en <code>msg_data</code>. A partir de ahí, ninguna máquina sabe que <code>03</code> era un número. Para <code>msg_tx</code> y <code>uart_tx</code> son solo bytes.</div>
+</section>
+
+<section>
+  <div class="eyebrow">4 · Referencia</div>
+  <h2>Cada estado, qué hace y cuándo sale</h2>
+  <div class="three">
+    <div class="tbl"><table>
+      <thead><tr><th>braille_controller</th><th>Qué hace</th><th>Sale cuando</th><th>Va a</th></tr></thead>
+      <tbody>
+        <tr><td class="k c-ctrl">ST_IDLE</td><td>Atiende eventos en orden de prioridad: línea de la PC, cambio de switches, acorde, NEXT…</td><td>Pasa algo que requiere responder</td><td>ST_CMD, ST_SHOW, ST_TARGET o directo a ST_SEND</td></tr>
+        <tr><td class="k c-ctrl">ST_SEND</td><td>Tiene el mensaje listo en <code>msg_data</code> y espera turno</td><td><code>msg_busy = 0</code>. Ahí da el pulso <code>msg_start</code></td><td>ST_GAP</td></tr>
+        <tr><td class="k c-ctrl">ST_GAP</td><td>No hace nada: deja pasar 1 ciclo para que <code>msg_busy</code> alcance a subir</td><td>Siempre, al siguiente ciclo</td><td>ST_IDLE</td></tr>
+      </tbody>
+    </table></div>
+    <div class="tbl"><table>
+      <thead><tr><th>msg_tx</th><th>Qué hace</th><th>Sale cuando</th><th>Va a</th></tr></thead>
+      <tbody>
+        <tr><td class="k c-msg">IDLE</td><td><code>busy = 0</code>. Espera un mensaje</td><td><code>start = 1</code>. Copia <code>msg_data → data_reg</code>, pone <code>idx = 0</code> y <code>busy = 1</code></td><td>SEND</td></tr>
+        <tr><td class="k c-msg">SEND</td><td>Elige el byte número <code>idx</code> (o <code>\n</code> si <code>idx = len</code>) y da <code>uart_start</code></td><td>Siempre, en 1 ciclo</td><td>WAIT</td></tr>
+        <tr><td class="k c-msg">WAIT</td><td>Espera a que uart_tx termine el byte (≈ 1.04 ms)</td><td><code>uart_done = 1</code></td><td>SEND con <code>idx+1</code> si faltan bytes; IDLE si ya fue el <code>\n</code></td></tr>
+      </tbody>
+    </table></div>
+    <div class="tbl"><table>
+      <thead><tr><th>uart_tx</th><th>Qué hace</th><th>Sale cuando</th><th>Va a</th></tr></thead>
+      <tbody>
+        <tr><td class="k c-utx">IDLE</td><td>Línea en 1 (reposo)</td><td><code>tx_start = 1</code>. Guarda el byte en <code>tx_data</code></td><td>START</td></tr>
+        <tr><td class="k c-utx">START</td><td>Pone la línea en 0 (bit de inicio)</td><td>Pasan 5208 ciclos</td><td>DATA</td></tr>
+        <tr><td class="k c-utx">DATA</td><td>Saca <code>tx_data[bit_index]</code>, empezando por el bit 0</td><td>Terminó el bit 7</td><td>STOP</td></tr>
+        <tr><td class="k c-utx">STOP</td><td>Pone la línea en 1 (bit de fin)</td><td>Pasan 5208 ciclos. Da el pulso <code>tx_done</code></td><td>IDLE</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">5 · En números</div>
+  <h2>Cuánto tarda cada máquina</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Máquina</th><th>Tiempo en este mensaje</th><th>Por qué</th></tr></thead>
+    <tbody>
+      <tr><td class="k c-ctrl">controller</td><td>3 ciclos = 60 ns</td><td>IDLE → SEND → GAP → IDLE. Después queda libre para atender botones</td></tr>
+      <tr><td class="k c-msg">msg_tx</td><td>≈ 7.3 ms</td><td>7 bytes × (SEND + WAIT). Casi todo el tiempo está en WAIT</td></tr>
+      <tr><td class="k c-utx">uart_tx</td><td>7 × 1.04 ms = 7.3 ms</td><td>7 bytes × 10 bits × 5208 ciclos = 364 560 ciclos</td></tr>
+    </tbody>
+  </table></div>
+  <div class="idea">El controller termina en 60 nanosegundos, mientras que el cable tarda 7 milisegundos, unas 120 000 veces más. Por eso existe la cadena de máquinas con copias del mensaje: el controller nunca se queda esperando al cable.</div>
+</section>
+
+</div>
+
+<script>
+(function(){
+  var MSG = ['O','m','0','3','0','1'];
+  var FULL = MSG.concat(['\n']);
+  function hx2(n){ return n.toString(16).toUpperCase().padStart(2,'0'); }
+  function vis(c){ return c === '\n' ? '\\n' : c; }
+  function code(c){ return c === '\n' ? 10 : c.charCodeAt(0); }
+  function lsbBits(c){ var v = code(c), a = []; for (var i = 0; i < 8; i++) a.push((v >> i) & 1); return a; }
+
+  var base = {
+    c:'IDLE', m:'IDLE', u:'IDLE',
+    hits:2, misses:1, msgData:null, msgLen:0, msgStart:0, msgBusy:0,
+    dataReg:null, lenReg:0, idx:'-', uartData:null, uartStart:0,
+    txData:null, bitIndex:'-', tx:1, txDone:0, bits:null, wire:0,
+    hot:{}
+  };
+  function mk(prev, ch){ var s = JSON.parse(JSON.stringify(prev)); s.msgStart = 0; s.uartStart = 0; s.txDone = 0; s.hot = {}; for (var k in ch) s[k] = ch[k]; return s; }
+
+  var steps = [];
+  var s = mk(base, {});
+  steps.push({s:s, t:'Todo en reposo', d:'Estás en modo práctica y la letra objetivo es la m. Llevas 2 aciertos y 1 error. Las tres máquinas están en reposo y la línea TX vale 1.'});
+
+  s = mk(s, {c:'SEND', hits:3, msgData:MSG.slice(), msgLen:6, hot:{hits:1, msgData:1, msgLen:1}});
+  steps.push({s:s, t:'Llega tu acorde: ¡acierto!', d:'En ST_IDLE el controller compara tu acorde con el patrón de la m y coinciden. En la misma flecha hacia ST_SEND hace hits ← 3 y arma msg_data con 6 caracteres: "O" (acierto), "m" (lo que tecleaste), "03" (hexc parte los aciertos) y "01" (los errores). msg_len ← 6.'});
+
+  s = mk(s, {c:'GAP', msgStart:1, hot:{msgStart:1}});
+  steps.push({s:s, t:'ST_SEND: ¿está libre msg_tx?', d:'msg_busy vale 0, así que el transmisor está libre. El controller da un pulso msg_start = 1 (dura un solo ciclo) y salta a ST_GAP.'});
+
+  s = mk(s, {c:'IDLE', m:'SEND', dataReg:MSG.slice(), lenReg:6, idx:0, msgBusy:1, hot:{dataReg:1, lenReg:1, idx:1, msgBusy:1}});
+  steps.push({s:s, t:'msg_tx copia el mensaje', d:'msg_tx estaba en IDLE y vio start = 1. Copia msg_data en data_reg, guarda len_reg = 6, pone idx = 0 y busy = 1, y pasa a SEND. Mientras tanto el controller sale de ST_GAP y vuelve a ST_IDLE: ya está libre para atender botones aunque el mensaje no haya salido.'});
+
+  for (var i = 0; i < FULL.length; i++){
+    var ch = FULL[i], last = (i === FULL.length - 1);
+    var what = last ? 'el \\n (8\'h0A), porque idx = len_reg = 6' : 'data_reg[' + (i*8+7) + ':' + (i*8) + '] = "' + vis(ch) + '"';
+    s = mk(s, {m:'WAIT', u:'IDLE', uartData:ch, uartStart:1, hot:{uartData:1, uartStart:1}});
+    steps.push({s:s, byteStart:true, t:'Byte ' + (i+1) + ' de 7: msg_tx elige «' + vis(ch) + '»', d:'En SEND, con idx = ' + i + ', msg_tx toma ' + what + '. Lo pone en uart_data, da el pulso uart_start y pasa a WAIT.'});
+
+    s = mk(s, {u:'START', txData:ch, tx:0, bitIndex:0, bits:null, hot:{txData:1, tx:1}});
+    steps.push({s:s, t:'uart_tx: bit de START', d:'uart_tx vio tx_start = 1. Guarda «' + vis(ch) + '» (0x' + hx2(code(ch)) + ') en tx_data y baja la línea a 0 durante 5208 ciclos (104 µs). Así MATLAB sabe que empieza un byte.'});
+
+    s = mk(s, {u:'DATA', bits:lsbBits(ch), bitIndex:'0→7', tx:'bits', hot:{bits:1, bitIndex:1}});
+    steps.push({s:s, t:'uart_tx: los 8 bits de «' + vis(ch) + '»', d:'0x' + hx2(code(ch)) + ' = ' + code(ch).toString(2).padStart(8,'0') + ' en binario. Sale del bit 0 al 7, o sea al revés: ' + lsbBits(ch).join(' ') + '. Cada bit dura 5208 ciclos y bit_index cuenta de 0 a 7. msg_tx sigue esperando en WAIT.'});
+
+    var ch2 = last ? {u:'STOP', tx:1, txDone:1, wire:i+1, m:'IDLE', msgBusy:0, idx:'-', hot:{txDone:1, msgBusy:1}}
+                   : {u:'STOP', tx:1, txDone:1, wire:i+1, m:'SEND', idx:i+1, hot:{txDone:1, idx:1}};
+    s = mk(s, ch2);
+    steps.push({s:s, t: last ? 'STOP del \\n: mensaje completo' : 'uart_tx: STOP y aviso a msg_tx',
+      d: last ? 'uart_tx manda el STOP (línea en 1) y da tx_done. msg_tx, en WAIT, ve uart_done con idx = len_reg, así que ya fue el \\n: baja busy a 0 y regresa a IDLE. MATLAB recibe el \\n y procesa la línea completa.'
+              : 'uart_tx sube la línea a 1 (STOP) durante 5208 ciclos y da el pulso tx_done. msg_tx, en WAIT, ve uart_done y como idx (' + i + ') < len_reg (6) hace idx ← ' + (i+1) + ' y vuelve a SEND. El byte «' + vis(ch) + '» ya llegó a MATLAB.'});
+  }
+
+  s = mk(s, {u:'IDLE', bits:null, bitIndex:'-', hot:{}});
+  steps.push({s:s, t:'Listo: MATLAB leyó «Om0301»', d:'Las tres máquinas vuelven al reposo. MATLAB separa la línea: O = acierto, m = letra tecleada, 03 = 3 aciertos, 01 = 1 error. Muestra la precisión y lo dice en voz alta. En total: 7 bytes en 7.3 ms.'});
+
+  var cur = 0, timer = null;
+  var $ = function(id){ return document.getElementById(id); };
+
+  function boxes(arr, curIdx, showNl){
+    var out = '<div class="bx">';
+    for (var i = 0; i < 6; i++){
+      var v = arr ? arr[i] : null;
+      out += '<span class="' + (v === null ? 'zero' : '') + (curIdx === i ? ' cur' : '') + '">' + (v === null ? '0' : vis(v)) + '<small>b' + i + '</small></span>';
+    }
+    if (showNl) out += '<span class="' + (curIdx === 6 ? 'cur' : 'zero') + '" title="no se guarda: lo genera msg_tx">\\n<small>extra</small></span>';
+    return out + '</div>';
+  }
+  function kv(rows){ var o = '<div class="kv">'; rows.forEach(function(r){ o += '<span>' + r[0] + '</span><b class="' + (r[2] ? 'hot' : '') + '">' + r[1] + '</b>'; }); return o + '</div>'; }
+
+  function render(){
+    var st = steps[cur], x = st.s, h = x.hot;
+    ['c','m','u'].forEach(function(p){
+      document.querySelectorAll('[id^="' + p + '-"]').forEach(function(g){ g.classList.toggle('on', g.id === p + '-' + x[p]); });
+    });
+    $('nTitle').textContent = st.t;
+    $('nText').textContent = st.d;
+    $('count').textContent = 'paso ' + (cur + 1) + ' / ' + steps.length;
+    $('prog').style.width = ((cur) / (steps.length - 1) * 100) + '%';
+    $('bPrev').disabled = cur === 0; $('bNext').disabled = cur === steps.length - 1; $('bByte').disabled = cur === steps.length - 1;
+
+    $('rcS').textContent = 'ST_' + x.c;
+    $('rc').innerHTML = kv([
+      ['hits', x.hits + ' (0x' + hx2(x.hits) + ')', h.hits],
+      ['misses', x.misses + ' (0x' + hx2(x.misses) + ')', 0],
+      ['msg_len', x.msgLen, h.msgLen],
+      ['msg_start', x.msgStart, h.msgStart],
+      ['msg_busy', x.msgBusy + (x.msgBusy ? ' (ocupado)' : ' (libre)'), h.msgBusy]
+    ]) + '<div class="kv" style="margin-top:4px"><span' + (h.msgData ? ' style="color:var(--ctrl);font-weight:600"' : '') + '>msg_data[47:0]</span><b></b></div>' + boxes(x.msgData, -1, false);
+
+    $('rmS').textContent = x.m;
+    var idxNum = typeof x.idx === 'number' ? x.idx : -1;
+    $('rm').innerHTML = kv([
+      ['busy', x.msgBusy, h.msgBusy],
+      ['len_reg', x.lenReg, h.lenReg],
+      ['idx', x.idx, h.idx],
+      ['uart_data', x.uartData === null ? '—' : '«' + vis(x.uartData) + '» 0x' + hx2(code(x.uartData)), h.uartData],
+      ['uart_start', x.uartStart, h.uartStart]
+    ]) + '<div class="kv" style="margin-top:4px"><span' + (h.dataReg ? ' style="color:var(--msg);font-weight:600"' : '') + '>data_reg[47:0]</span><b></b></div>' + boxes(x.dataReg, x.m === 'IDLE' ? -1 : idxNum, true);
+
+    $('ruS').textContent = x.u;
+    var bitsHtml = '—';
+    if (x.bits){ bitsHtml = '<span class="bits"><span class="s">0</span>' + x.bits.map(function(b){ return '<span>' + b + '</span>'; }).join('') + '<span class="s">1</span></span>'; }
+    $('ru').innerHTML = kv([
+      ['tx_data', x.txData === null ? '—' : '«' + vis(x.txData) + '» 0x' + hx2(code(x.txData)), h.txData],
+      ['bit_index', x.bitIndex, h.bitIndex],
+      ['tx (línea)', x.tx === 'bits' ? 'bit por bit' : x.tx + (x.tx === 1 ? ' (alto)' : ' (bajo)'), h.tx],
+      ['tx_done', x.txDone, h.txDone]
+    ]) + '<div class="kv" style="margin-top:4px"><span>en el cable</span><b></b></div>' + bitsHtml;
+
+    var w = '';
+    for (var i = 0; i < x.wire; i++) w += '<span>' + vis(FULL[i]) + '</span>';
+    $('wire').innerHTML = w || '<em>todavía nada</em>';
+  }
+
+  function go(n){ cur = Math.max(0, Math.min(steps.length - 1, n)); render(); }
+  function stop(){ if (timer){ clearInterval(timer); timer = null; $('bPlay').textContent = '▶ Reproducir'; } }
+  $('bNext').onclick = function(){ stop(); go(cur + 1); };
+  $('bPrev').onclick = function(){ stop(); go(cur - 1); };
+  $('bReset').onclick = function(){ stop(); go(0); };
+  $('bByte').onclick = function(){ stop(); var n = cur + 1; while (n < steps.length - 1 && !steps[n].byteStart) n++; go(n); };
+  $('bPlay').onclick = function(){
+    if (timer){ stop(); return; }
+    if (cur === steps.length - 1) go(0);
+    $('bPlay').textContent = '⏸ Pausa';
+    timer = setInterval(function(){ if (cur >= steps.length - 1){ stop(); return; } go(cur + 1); }, 1800);
+  };
+  document.addEventListener('keydown', function(e){
+    if (e.target.tagName === 'INPUT') return;
+    if (e.key === 'ArrowRight'){ stop(); go(cur + 1); }
+    if (e.key === 'ArrowLeft'){ stop(); go(cur - 1); }
+  });
+  go(1);
+})();
+</script>

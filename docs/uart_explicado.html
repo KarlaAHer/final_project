@@ -1,0 +1,941 @@
+<title>UART Braille paso a paso</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: guía de estudio en una columna; cada tema es un bloque con explicación, tabla de señales y código */
+:root{
+  --bg:#f4f6f7; --panel:#ffffff; --fg:#18222c; --muted:#5b6874; --line:#cfd7dd; --soft:#e8edf0;
+  --rx:#0b7a75; --rx-soft:#ddf1ef; --tx:#b4530b; --tx-soft:#fcebdb;
+  --mem:#5b4bb7; --mem-soft:#ece9fa; --ok:#2f7d32; --bad:#b3261e; --bad-soft:#fbe3e1;
+  --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f151b; --panel:#161f27; --fg:#e4eaef; --muted:#97a4b0; --line:#33414d; --soft:#1e2832;
+  --rx:#3cc4bb; --rx-soft:#12302f; --tx:#f19a4f; --tx-soft:#36230f;
+  --mem:#a99bf5; --mem-soft:#251f45; --ok:#6fcf73; --bad:#ff8a80; --bad-soft:#3a1715; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f151b; --panel:#161f27; --fg:#e4eaef; --muted:#97a4b0; --line:#33414d; --soft:#1e2832;
+  --rx:#3cc4bb; --rx-soft:#12302f; --tx:#f19a4f; --tx-soft:#36230f;
+  --mem:#a99bf5; --mem-soft:#251f45; --ok:#6fcf73; --bad:#ff8a80; --bad-soft:#3a1715; color-scheme:dark}
+
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.6}
+.wrap{max-width:1000px;margin:0 auto;padding-block:32px 72px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:56px}
+h1,h2,h3,h4{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.2}
+h1{font-size:clamp(30px,5vw,46px);font-weight:800}
+h2{font-size:clamp(23px,3.2vw,30px);font-weight:800}
+h3{font-size:19px;font-weight:700}
+h4{font-size:16px;font-weight:700}
+p{margin:0;max-width:70ch}
+code,.mono{font-family:var(--f-mono);font-size:.9em}
+:not(pre)>code{background:var(--soft);padding:1px 5px;border-radius:3px}
+a{color:var(--rx)}
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--tx);outline-offset:2px}
+section{display:flex;flex-direction:column;gap:18px;scroll-margin-top:16px}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.lead{font-size:18px;color:var(--muted)}
+.rx{color:var(--rx)} .tx{color:var(--tx)} .mem{color:var(--mem)}
+
+nav.toc{display:flex;flex-wrap:wrap;gap:8px}
+nav.toc a{font-size:14px;text-decoration:none;color:var(--fg);border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:4px 12px}
+nav.toc a:hover{border-color:var(--rx);color:var(--rx)}
+
+.box{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:20px clamp(16px,3vw,26px);display:flex;flex-direction:column;gap:12px;min-width:0}
+.idea{border-left:4px solid var(--rx);background:var(--rx-soft);padding:14px 18px;border-radius:0 8px 8px 0}
+.idea.tx{border-color:var(--tx);background:var(--tx-soft);color:var(--fg)}
+.idea.bad{border-color:var(--bad);background:var(--bad-soft)}
+.idea b:first-child{display:block;margin-bottom:2px}
+
+/* analogía */
+.chain{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px}
+.chain .step{flex:1 1 150px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.chain .step b{font-family:var(--f-display);font-size:15px}
+.chain .step span{font-size:14px;color:var(--muted)}
+.chain .step.r{border-top:3px solid var(--rx)} .chain .step.t{border-top:3px solid var(--tx)} .chain .step.m{border-top:3px solid var(--mem)}
+.chain .arrow{align-self:center;color:var(--muted);font-family:var(--f-mono)}
+
+/* glosario */
+.gloss{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.term{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.term dt{font-family:var(--f-mono);font-weight:600;font-size:15px}
+.term .full{font-size:13px;color:var(--muted);font-style:italic}
+.term dd{margin:0;font-size:14.5px}
+.gloss-h{font-family:var(--f-display);font-weight:700;font-size:16px;margin-top:8px;display:flex;align-items:center;gap:10px}
+.gloss-h::after{content:"";flex:1;height:1px;background:var(--line)}
+
+/* tablas */
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:620px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--soft);vertical-align:top}
+th{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500;background:var(--bg)}
+tr:last-child td{border-bottom:0}
+td.k{font-family:var(--f-mono);font-weight:600;white-space:nowrap}
+td.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.in{color:var(--rx);font-family:var(--f-mono);font-size:12px;font-weight:600}
+.out{color:var(--tx);font-family:var(--f-mono);font-size:12px;font-weight:600}
+.wire{display:inline-block;font-family:var(--f-mono);font-size:13px;padding:2px 8px;border-radius:4px;background:var(--soft);white-space:nowrap}
+.ok{color:var(--ok);font-weight:600} .bad{color:var(--bad);font-weight:600}
+
+/* código */
+pre{margin:0;background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:14px 16px;overflow-x:auto;font-family:var(--f-mono);font-size:13.5px;line-height:1.55}
+pre .c{color:var(--muted)}
+pre .h{color:var(--tx);font-weight:600}
+.codepair{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:14px;align-items:start}
+.codepair .exp{font-size:14.5px;display:flex;flex-direction:column;gap:8px}
+@media (max-width:760px){.codepair{grid-template-columns:1fr}}
+
+/* tarjeta de módulo */
+.modhead{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px}
+.modhead h3{font-family:var(--f-mono);font-size:21px}
+.pill{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;border:1px solid currentColor;border-radius:3px;padding:1px 7px}
+.blk{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;overflow-x:auto}
+.blk .side{display:flex;flex-direction:column;gap:6px;min-width:0}
+.blk .side.r{align-items:flex-start}
+.blk .side.l{align-items:flex-end}
+.blk .core{font-family:var(--f-mono);font-weight:600;border:2px solid var(--c,var(--rx));background:var(--panel);border-radius:8px;padding:18px 16px;text-align:center;min-width:120px}
+.blk .sig{font-family:var(--f-mono);font-size:12.5px;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.blk .sig::after,.blk .sig::before{color:var(--muted)}
+.blk .side.l .sig::after{content:"──▶"}
+.blk .side.r .sig::before{content:"──▶"}
+@media (max-width:560px){.blk{grid-template-columns:1fr}.blk .side.l,.blk .side.r{align-items:flex-start}.blk .side.l .sig::after{content:""}.blk .side.l .sig::before{content:"▶ entra";color:var(--rx);font-size:11px}.blk .side.r .sig::before{content:"◀ sale";color:var(--tx);font-size:11px}}
+
+/* formato de mensaje */
+.bytes{display:flex;flex-wrap:wrap;gap:4px}
+.bytes span{font-family:var(--f-mono);font-size:14px;min-width:30px;text-align:center;padding:4px 7px;border-radius:4px;border:1px solid var(--line);background:var(--panel)}
+.bytes span.cmd{border-color:var(--tx);color:var(--tx);font-weight:600}
+.bytes span.dat{background:var(--soft)}
+.bytes span.end{color:var(--muted);border-style:dashed}
+.bytes.r span.cmd{border-color:var(--rx);color:var(--rx)}
+
+/* simulador */
+.sim{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:16px}
+@media (max-width:760px){.sim{grid-template-columns:1fr}}
+.ctl{display:flex;flex-direction:column;gap:12px}
+.ctl label{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.ctl select,.ctl input{font:inherit;font-family:var(--f-mono);padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg)}
+.btns{display:flex;flex-wrap:wrap;gap:6px}
+button{font:inherit;font-size:14px;cursor:pointer;border-radius:6px;padding:7px 12px;border:1px solid var(--line);background:var(--panel);color:var(--fg)}
+button.primary{background:var(--rx);border-color:var(--rx);color:var(--panel);font-weight:600}
+button.chip{font-family:var(--f-mono);font-size:13px;padding:4px 9px}
+button:hover{border-color:var(--rx)}
+.state{font-family:var(--f-mono);font-size:12.5px;color:var(--muted);display:grid;grid-template-columns:auto 1fr;gap:2px 10px}
+.state b{color:var(--fg);font-weight:500}
+.log{display:flex;flex-direction:column;gap:10px;max-height:560px;overflow-y:auto;padding-right:4px}
+.ent{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:10px 12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.ent.pc{border-left:4px solid var(--rx)} .ent.fp{border-left:4px solid var(--tx)} .ent.info{border-left:4px solid var(--muted)}
+.ent .who{font-family:var(--f-mono);font-size:12px;font-weight:600}
+.ent .why{font-size:13.5px;color:var(--muted)}
+.btab{overflow-x:auto}
+.btab table{min-width:0;font-size:12.5px}
+.btab td,.btab th{padding:3px 8px;font-family:var(--f-mono)}
+.btab th{font-size:10.5px}
+.empty{color:var(--muted);font-size:14px}
+
+ol.steps{margin:0;padding-left:0;list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:10px}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:34px 1fr;gap:12px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-mono);font-weight:600;font-size:14px;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;border:2px solid var(--c,var(--rx));color:var(--c,var(--rx))}
+ol.steps li.t{--c:var(--tx)} ol.steps li.m{--c:var(--mem)}
+ol.steps li div{min-width:0;padding-top:3px}
+
+.faq{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.faq .box h4{font-size:15.5px}
+.faq .box p{font-size:14.5px}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+html{scroll-behavior:smooth}
+</style>
+
+<div class="wrap">
+
+<header style="display:flex;flex-direction:column;gap:14px">
+  <div class="eyebrow">Proyecto Braille · DE10-Lite · Guía para principiantes</div>
+  <h1>La UART de tu proyecto, explicada desde cero</h1>
+  <p class="lead">Aquí vas a encontrar qué significa cada abreviación, qué puedes mandarle a la FPGA, qué te contesta, cuántos caracteres caben y qué hace cada cable en el código. Al final hay un simulador para probar comandos sin conectar la tarjeta.</p>
+  <nav class="toc" aria-label="Contenido">
+    <a href="#idea">La idea</a><a href="#glosario">Diccionario</a><a href="#mandar">Qué puedo mandar</a>
+    <a href="#recibir">Qué me contesta</a><a href="#simulador">Simulador</a><a href="#byte">Un byte por dentro</a>
+    <a href="#modulos">Cada módulo</a><a href="#viaje">Viaje de una letra</a><a href="#numeros">Por qué esos números</a><a href="#faq">Preguntas</a>
+  </nav>
+</header>
+
+<!-- ================= IDEA ================= -->
+<section id="idea">
+  <div class="eyebrow">Empecemos</div>
+  <h2>La idea en 30 segundos</h2>
+  <p>Piensa en la UART como un chat por mensajes de texto entre tu PC y la FPGA, con tres reglas:</p>
+  <div class="box">
+    <p><b>1. Se manda una letra a la vez.</b> Cada letra viaja como un número de 8 bits (un byte), y los bits van uno detrás de otro por un solo cable.</p>
+    <p><b>2. Cada mensaje termina con Enter.</b> En el código el Enter se escribe <code>\n</code>. Así la FPGA sabe que el mensaje terminó.</p>
+    <p><b>3. La primera letra dice qué quieres.</b> <code>R</code> significa "muestra esta palabra", <code>Q</code> significa "¿en qué modo estás?", etc. La FPGA contesta igual: una letra que dice qué tipo de respuesta es, a veces datos, y un Enter.</p>
+  </div>
+  <p>Hay <b>dos cables</b> independientes: uno para lo que <span class="rx"><b>entra</b></span> a la FPGA y otro para lo que <span class="tx"><b>sale</b></span>. Como no comparten cable, pueden funcionar al mismo tiempo.</p>
+  <div class="chain">
+    <div class="step r"><b>MATLAB escribe</b><span>"Rhola" + Enter</span></div><div class="arrow">→</div>
+    <div class="step r"><b>uart_rx</b><span>convierte bits en letras</span></div><div class="arrow">→</div>
+    <div class="step r"><b>line_rx</b><span>junta letras hasta el Enter</span></div><div class="arrow">→</div>
+    <div class="step m"><b>char_buffer</b><span>guarda "hola"</span></div><div class="arrow">→</div>
+    <div class="step"><b>controller</b><span>decide qué hacer y qué contestar</span></div><div class="arrow">→</div>
+    <div class="step t"><b>msg_tx + uart_tx</b><span>mandan "Dh" + Enter</span></div>
+  </div>
+</section>
+
+<!-- ================= GLOSARIO ================= -->
+<section id="glosario">
+  <div class="eyebrow">Antes de seguir</div>
+  <h2>Diccionario de abreviaciones</h2>
+  <p>Todas las palabras raras que aparecen en tus archivos, agrupadas por tema.</p>
+
+  <div class="gloss-h">Comunicación</div>
+  <dl class="gloss">
+    <div class="term"><dt>UART</dt><span class="full">Universal Asynchronous Receiver-Transmitter</span><dd>Receptor-transmisor asíncrono universal. "Asíncrono" quiere decir que no se manda reloj: los dos lados acuerdan la velocidad de antemano.</dd></div>
+    <div class="term"><dt>RX</dt><span class="full">Receive</span><dd>Recibir. Todo lo que tiene "rx" es lo que <b>entra</b> a la FPGA.</dd></div>
+    <div class="term"><dt>TX</dt><span class="full">Transmit</span><dd>Transmitir. Todo lo que tiene "tx" es lo que <b>sale</b> de la FPGA.</dd></div>
+    <div class="term"><dt>bit</dt><span class="full">binary digit</span><dd>Un 0 o un 1. En el cable, 0 = voltaje bajo y 1 = voltaje alto.</dd></div>
+    <div class="term"><dt>byte</dt><dd>8 bits juntos. Cabe un número del 0 al 255, o sea un carácter.</dd></div>
+    <div class="term"><dt>baudio · baud</dt><dd>Bits por segundo. Tu proyecto usa <b>9600</b>, así que cada bit dura 1/9600 s = 104 µs.</dd></div>
+    <div class="term"><dt>8N1</dt><dd>El formato: <b>8</b> bits de datos, <b>N</b>o hay bit de paridad (de revisión), <b>1</b> bit de stop.</dd></div>
+    <div class="term"><dt>START · STOP</dt><dd>Bit de inicio (siempre 0) y bit de fin (siempre 1). Encierran cada byte para que el receptor sepa dónde empieza y dónde acaba.</dd></div>
+    <div class="term"><dt>LSB · MSB</dt><span class="full">Least / Most Significant Bit</span><dd>El bit menos y más importante. La UART manda primero el LSB (bit 0).</dd></div>
+    <div class="term"><dt>ASCII</dt><span class="full">American Standard Code for Information Interchange</span><dd>La tabla que dice qué número es cada letra. <code>'a'</code> = 97, <code>'A'</code> = 65, <code>'0'</code> = 48.</dd></div>
+    <div class="term"><dt>Latin-1</dt><dd>Una extensión de ASCII que agrega la ñ (<code>ñ</code> = 241 = <code>0xF1</code>) y los acentos, siempre en 1 byte.</dd></div>
+    <div class="term"><dt>hex · 0x · h</dt><span class="full">hexadecimal</span><dd>Base 16: dígitos 0–9 y A–F. <code>0x41</code>, <code>8'h41</code> y <code>41h</code> son el mismo número: 65.</dd></div>
+    <div class="term"><dt>\n · LF</dt><span class="full">Line Feed</span><dd>Salto de línea, el "Enter". Es el número 10 (<code>0x0A</code>). Marca el fin de cada mensaje.</dd></div>
+    <div class="term"><dt>\r · CR</dt><span class="full">Carriage Return</span><dd>Retorno de carro, número 13 (<code>0x0D</code>). Windows a veces lo manda antes del \n. Tu FPGA también lo acepta como fin de línea.</dd></div>
+    <div class="term"><dt>dúplex completo</dt><dd>Se puede mandar y recibir al mismo tiempo porque hay un cable para cada dirección.</dd></div>
+    <div class="term"><dt>protocolo</dt><dd>Las reglas que inventaste para hablar: qué letra significa qué. Por ejemplo, <code>R</code> = leer palabra.</dd></div>
+  </dl>
+
+  <div class="gloss-h">Hardware</div>
+  <dl class="gloss">
+    <div class="term"><dt>FPGA</dt><span class="full">Field-Programmable Gate Array</span><dd>Un chip lleno de lógica que tú "cableas" con Verilog. El de tu tarjeta es un Intel MAX 10.</dd></div>
+    <div class="term"><dt>DE10-Lite</dt><dd>La tarjeta de desarrollo con la FPGA, los switches (SW), los botones (KEY), los LEDs (LEDR) y los displays (HEX).</dd></div>
+    <div class="term"><dt>FT232RL</dt><dd>Un chip adaptador: por un lado se conecta por USB y por el otro saca RX/TX. La PC lo ve como un puerto COM.</dd></div>
+    <div class="term"><dt>HC-05</dt><dd>Un módulo Bluetooth que también saca RX/TX. Sirve para hacer lo mismo sin cable.</dd></div>
+    <div class="term"><dt>COM</dt><dd>El nombre que Windows le da al puerto serie (COM3, COM5…). Es el que eliges en la ventana de MATLAB.</dd></div>
+    <div class="term"><dt>UART_RX · UART_TX</dt><dd>Los dos pines físicos de la FPGA. UART_RX se conecta al TX del FT232RL, y UART_TX al RX. Se cruzan: lo que uno manda, el otro lo recibe.</dd></div>
+    <div class="term"><dt>CLOCK_50</dt><dd>El reloj de la tarjeta: 50 millones de pulsos por segundo. Un ciclo dura 20 ns.</dd></div>
+    <div class="term"><dt>KEY[0]</dt><dd>El botón de reset. Da 0 al presionarlo, por eso en el top aparece <code>rst = ~KEY[0]</code> (se invierte).</dd></div>
+  </dl>
+
+  <div class="gloss-h">Verilog</div>
+  <dl class="gloss">
+    <div class="term"><dt>module</dt><dd>Un bloque de hardware con entradas y salidas, como una pieza de Lego.</dd></div>
+    <div class="term"><dt>input · output</dt><dd>Entrada o salida del módulo.</dd></div>
+    <div class="term"><dt>wire</dt><dd>Un cable: solo conecta cosas y no guarda nada.</dd></div>
+    <div class="term"><dt>reg</dt><dd>Algo que se asigna dentro de un <code>always</code>. Si ese <code>always</code> tiene reloj, se vuelve un registro que <b>sí guarda</b> su valor.</dd></div>
+    <div class="term"><dt>[7:0]</dt><dd>Ancho de la señal: del bit 7 al 0, o sea 8 bits. <code>[47:0]</code> son 48 bits.</dd></div>
+    <div class="term"><dt>parameter</dt><dd>Un número configurable del módulo, como <code>CLKS_PER_BIT</code>. El top puede cambiarlo al instanciar.</dd></div>
+    <div class="term"><dt>localparam</dt><dd>Una constante interna que no se puede cambiar desde afuera. Se usa para los nombres de estados como <code>IDLE</code>.</dd></div>
+    <div class="term"><dt>always @(posedge clk)</dt><dd>"Haz esto en cada flanco de subida del reloj." Así se describen los registros y las máquinas de estados.</dd></div>
+    <div class="term"><dt>&lt;=  ·  =</dt><dd><code>&lt;=</code> asigna con reloj (todos los registros cambian a la vez). <code>=</code> se usa en lógica combinacional.</dd></div>
+    <div class="term"><dt>assign</dt><dd>Conexión permanente: la salida siempre es igual a la expresión de la derecha.</dd></div>
+    <div class="term"><dt>FSM</dt><span class="full">Finite State Machine</span><dd>Máquina de estados: el circuito está en un "paso" (estado) y salta al siguiente según lo que pase.</dd></div>
+    <div class="term"><dt>pulso</dt><dd>Una señal que vale 1 durante un solo ciclo de reloj (20 ns). Sirve para avisar "pasó algo" una sola vez.</dd></div>
+    <div class="term"><dt>"R" en Verilog</dt><dd>Una letra entre comillas es su número ASCII de 8 bits. <code>"R"</code> = <code>8'h52</code> = 82.</dd></div>
+    <div class="term"><dt>{a, b, c}</dt><span class="full">concatenación</span><dd>Pega señales una detrás de otra. La <b>última</b> queda en los bits <b>más bajos</b>.</dd></div>
+    <div class="term"><dt>8'h0A · 13'd0 · 3'b101</dt><dd>Número con tamaño: <b>8</b> bits en <b>h</b>ex, <b>13</b> bits en <b>d</b>ecimal, <b>3</b> bits en <b>b</b>inario.</dd></div>
+    <div class="term"><dt>data_reg[idx*8 +: 8]</dt><dd>"Toma 8 bits empezando en el bit idx×8." Sirve para sacar el byte número idx de una señal grande.</dd></div>
+  </dl>
+
+  <div class="gloss-h">Nombres de señales</div>
+  <p style="font-size:14.5px;color:var(--muted)">Tus señales se forman combinando estas piezas. Por ejemplo, <code>buf_waddr</code> = buffer + write + address.</p>
+  <dl class="gloss">
+    <div class="term"><dt>clk · rst</dt><span class="full">clock · reset</span><dd>Reloj y reinicio. Todos los módulos con memoria los tienen.</dd></div>
+    <div class="term"><dt>data · din · dout</dt><dd>El dato que entra o sale.</dd></div>
+    <div class="term"><dt>ready · valid</dt><dd>"Ya hay un dato listo / válido": una bandera que avisa que el dato se puede usar.</dd></div>
+    <div class="term"><dt>ack</dt><span class="full">acknowledge</span><dd>Acuse de recibo: "ya lo tomé, gracias".</dd></div>
+    <div class="term"><dt>busy</dt><dd>Ocupado. Mientras vale 1 no le pidas nada nuevo.</dd></div>
+    <div class="term"><dt>start · done</dt><dd>"Empieza ahora" y "ya terminé". Normalmente son pulsos.</dd></div>
+    <div class="term"><dt>cmd</dt><span class="full">command</span><dd>Comando: la primera letra de la línea.</dd></div>
+    <div class="term"><dt>len</dt><span class="full">length</span><dd>Longitud: cuántos caracteres o bytes hay.</dd></div>
+    <div class="term"><dt>ovf · overflow</dt><dd>Desbordamiento: llegaron más datos de los que caben.</dd></div>
+    <div class="term"><dt>idx · index</dt><dd>Índice: en qué posición vamos (0, 1, 2…).</dd></div>
+    <div class="term"><dt>cnt · count</dt><dd>Contador.</dd></div>
+    <div class="term"><dt>buf</dt><span class="full">buffer</span><dd>Memoria temporal. En tu proyecto, <code>char_buffer</code>.</dd></div>
+    <div class="term"><dt>we · wr_en</dt><span class="full">write enable</span><dd>Permiso para escribir: si vale 1, se guarda.</dd></div>
+    <div class="term"><dt>waddr · raddr</dt><span class="full">write / read address</span><dd>Dirección (número de casilla) donde se escribe o se lee.</dd></div>
+    <div class="term"><dt>wdata · rdata</dt><span class="full">write / read data</span><dd>El dato que se escribe o el que se lee.</dd></div>
+    <div class="term"><dt>msg</dt><span class="full">message</span><dd>Mensaje de respuesta de la FPGA.</dd></div>
+    <div class="term"><dt>sync</dt><span class="full">synchronizer</span><dd>Flip-flops que "limpian" una señal que viene de afuera del reloj.</dd></div>
+    <div class="term"><dt>_r · _reg</dt><dd>Al final de un nombre significa "copia guardada en un registro". Por ejemplo, <code>cmd_r</code> es la copia de <code>line_cmd</code>.</dd></div>
+    <div class="term"><dt>_n</dt><dd>Al final de un nombre significa "activo en bajo": funciona con 0. Por ejemplo, <code>DOT_N</code> y <code>buttons_n</code>.</dd></div>
+    <div class="term"><dt>MAX_LEN · AW</dt><span class="full">Maximum Length · Address Width</span><dd>Máximo de caracteres (16) y bits de dirección (4, porque 2⁴ = 16).</dd></div>
+    <div class="term"><dt>CLKS_PER_BIT</dt><span class="full">clocks per bit</span><dd>Ciclos de reloj que dura un bit: 50 000 000 / 9600 = 5208.</dd></div>
+  </dl>
+</section>
+
+<!-- ================= MANDAR ================= -->
+<section id="mandar">
+  <div class="eyebrow">PC → FPGA</div>
+  <h2>Qué le puedes mandar a tu FPGA</h2>
+  <p>Solo existen <b>6 comandos</b>. Todos son una letra <b>mayúscula</b>, a veces seguida de datos, y siempre terminan en Enter.</p>
+
+  <div class="idea">
+    <b>Las 5 reglas para mandar</b>
+    1) La primera letra va en mayúscula: <code>r</code> no funciona, responde <code>!U</code>. &nbsp;
+    2) Termina con <code>\n</code>. MATLAB lo agrega solo (<code>write(s, [uint8(char(txt)) 10])</code>: ese 10 es el \n). &nbsp;
+    3) Máximo 16 caracteres después del comando. &nbsp;
+    4) Espera la respuesta antes de mandar otro comando. &nbsp;
+    5) La ñ va como un solo byte (241). MATLAB ya lo hace así con <code>uint8(char(...))</code>.
+  </div>
+
+  <div class="tbl"><table>
+    <thead><tr><th>Escribes</th><th>Qué significa</th><th>Caracteres que mandas</th><th>Cuándo funciona</th><th>Te contesta</th></tr></thead>
+    <tbody>
+      <tr><td class="k rx">R<i>texto</i></td><td><b>R</b>ead = leer. Carga una palabra y la muestra letra por letra en los servos.</td><td class="n">1 + (1 a 16) + 1<br><span style="color:var(--muted)">de 3 a 18 bytes</span></td><td>Solo en modo <b>lectura</b> (SW = 01)</td><td><code>D</code> + primera letra</td></tr>
+      <tr><td class="k rx">L<i>n</i></td><td><b>L</b>etras por sesión de práctica. n va de 0 a 99, y 0 = sin límite. Si nunca lo mandas, vale 10.</td><td class="n">3 o 4 bytes</td><td>En cualquier modo</td><td><code>L</code> + n en hex</td></tr>
+      <tr><td class="k rx">Q</td><td><b>Q</b>uery = preguntar. "¿En qué modo estás?"</td><td class="n">2 bytes</td><td>Siempre</td><td><code>M</code> + modo</td></tr>
+      <tr><td class="k rx">S</td><td><b>S</b>core = marcador. "¿Cuántos aciertos y errores llevo?"</td><td class="n">2 bytes</td><td>Siempre</td><td><code>S</code> + aciertos + errores</td></tr>
+      <tr><td class="k rx">C</td><td><b>C</b>lear = borrar el marcador.</td><td class="n">2 bytes</td><td>Siempre</td><td><code>S0000</code></td></tr>
+      <tr><td class="k rx">N</td><td><b>N</b>ext. Es como presionar el botón NEXT (KEY[1]). Sirve para probar sin tocar la tarjeta.</td><td class="n">2 bytes</td><td>Siempre</td><td>Lo mismo que el botón</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Qué caracteres puedes poner en la palabra (comando R)</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Carácter</th><th>¿Se muestra en los servos?</th><th>Detalle</th></tr></thead>
+    <tbody>
+      <tr><td class="k">a … z</td><td class="ok">Sí</td><td>Las 26 letras</td></tr>
+      <tr><td class="k">A … Z</td><td class="ok">Sí</td><td>Se ven igual que las minúsculas (no hay signo de mayúscula)</td></tr>
+      <tr><td class="k">ñ  Ñ</td><td class="ok">Sí</td><td>Puntos 1-2-4-5-6. Tiene que llegar como el byte 241 o 209</td></tr>
+      <tr><td class="k">espacio</td><td class="ok">Sí</td><td>Celda vacía: todos los servos abajo. Cuenta como carácter</td></tr>
+      <tr><td class="k">0-9 á é ! ? …</td><td class="bad">No</td><td>La celda queda vacía, pero la FPGA igual te responde <code>D</code> + ese carácter</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Ejemplos reales</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Modo</th><th>Mandas</th><th>Bytes</th><th>Respuesta</th><th>Por qué</th></tr></thead>
+    <tbody>
+      <tr><td>Lectura</td><td class="k">Rhola</td><td class="n">6</td><td class="k tx">Dh</td><td>Guardó 4 letras y muestra la primera</td></tr>
+      <tr><td>Lectura</td><td class="k">Rhola mundo</td><td class="n">12</td><td class="k tx">Dh</td><td>10 caracteres con el espacio. Sí caben</td></tr>
+      <tr><td>Lectura</td><td class="k">Rabcdefghijklmnopq</td><td class="n">19</td><td class="k tx">!L</td><td>17 letras: no caben (máximo 16). Se borra la palabra</td></tr>
+      <tr><td>Lectura</td><td class="k">R</td><td class="n">2</td><td class="k tx">!U</td><td>R sin palabra no tiene sentido</td></tr>
+      <tr><td>Escritura</td><td class="k">Rhola</td><td class="n">6</td><td class="k tx">!M</td><td>R solo funciona en modo lectura</td></tr>
+      <tr><td>Cualquiera</td><td class="k">L5</td><td class="n">3</td><td class="k tx">L05</td><td>5 en hex de dos dígitos es 05</td></tr>
+      <tr><td>Cualquiera</td><td class="k">L20</td><td class="n">4</td><td class="k tx">L14</td><td>20 en hex es 14 (1×16 + 4)</td></tr>
+      <tr><td>Cualquiera</td><td class="k">L100</td><td class="n">5</td><td class="k tx">!U</td><td>Más de 2 dígitos no se acepta</td></tr>
+      <tr><td>Cualquiera</td><td class="k">Lab</td><td class="n">4</td><td class="k tx">!U</td><td>No son dígitos</td></tr>
+      <tr><td>Cualquiera</td><td class="k">q</td><td class="n">2</td><td class="k tx">!U</td><td>Minúscula: no es un comando</td></tr>
+      <tr><td>Cualquiera</td><td class="k">X</td><td class="n">2</td><td class="k tx">!U</td><td>No existe el comando X (de la PC)</td></tr>
+    </tbody>
+  </table></div>
+  <p style="font-size:14px;color:var(--muted)">La columna "Bytes" cuenta el Enter (<code>\n</code>). La respuesta también lleva su Enter al final, aunque no se escriba en la tabla.</p>
+</section>
+
+<!-- ================= RECIBIR ================= -->
+<section id="recibir">
+  <div class="eyebrow">FPGA → PC</div>
+  <h2>Qué te manda la FPGA</h2>
+  <p>La FPGA manda <b>de 1 a 6 caracteres + Enter</b>, o sea entre 2 y 7 bytes. Algunos mensajes son respuesta a un comando y otros los manda <b>sola</b>, cuando pasa algo en la tarjeta (mueves un switch, presionas botones, etc.).</p>
+
+  <div class="tbl"><table>
+    <thead><tr><th>Mensaje</th><th>Significa</th><th>Ejemplo</th><th>Bytes</th><th>¿Cuándo?</th></tr></thead>
+    <tbody>
+      <tr><td class="k tx">M<i>m</i></td><td><b>M</b>odo. m = <code>I</code> reposo (idle), <code>R</code> lectura, <code>W</code> escritura (write), <code>P</code> práctica</td><td class="k">MR</td><td class="n">3</td><td>Sola, al mover SW1-SW0. O como respuesta a <code>Q</code></td></tr>
+      <tr><td class="k tx">D<i>c</i></td><td><b>D</b>isplay: "estoy mostrando la letra c"</td><td class="k">Dh</td><td class="n">3</td><td>Al recibir <code>R</code> y con cada NEXT en lectura</td></tr>
+      <tr><td class="k tx">E</td><td><b>E</b>nd: se acabó la palabra</td><td class="k">E</td><td class="n">2</td><td>NEXT después de la última letra</td></tr>
+      <tr><td class="k tx">K<i>c</i></td><td><b>K</b>ey (tecla): tecleaste la letra c en los botones Braille</td><td class="k">Ka</td><td class="n">3</td><td>Sola, en modo escritura. <code>K?</code> = patrón que no existe, <code>K </code> = NEXT (espacio)</td></tr>
+      <tr><td class="k tx">T<i>c</i></td><td><b>T</b>arget (objetivo): la letra que tienes que escribir</td><td class="k">Tm</td><td class="n">3</td><td>Sola, en práctica</td></tr>
+      <tr><td class="k tx">O<i>c hh mm</i></td><td>Acierto (<b>O</b>k). c = lo que tecleaste, hh = aciertos, mm = errores</td><td class="k">Om0301</td><td class="n">7</td><td>Sola, en práctica</td></tr>
+      <tr><td class="k tx">X<i>c hh mm</i></td><td>Error (una <b>X</b> de "mal")</td><td class="k">Xk0302</td><td class="n">7</td><td>Sola, en práctica</td></tr>
+      <tr><td class="k tx">F<i>hh mm</i></td><td><b>F</b>in de la sesión: resultado final</td><td class="k">F0802</td><td class="n">6</td><td>Sola, al completar las n letras de <code>L</code></td></tr>
+      <tr><td class="k tx">L<i>hh</i></td><td>Confirmación de las letras por sesión</td><td class="k">L0A</td><td class="n">4</td><td>Respuesta a <code>L</code></td></tr>
+      <tr><td class="k tx">S<i>hh mm</i></td><td><b>S</b>core: marcador</td><td class="k">S0C03</td><td class="n">6</td><td>Respuesta a <code>S</code> o <code>C</code></td></tr>
+      <tr><td class="k bad">!L</td><td>Error: palabra muy <b>L</b>arga (más de 16)</td><td class="k">!L</td><td class="n">3</td><td>Respuesta a <code>R</code></td></tr>
+      <tr><td class="k bad">!U</td><td>Error: comando desconocido o mal escrito (<i><b>U</b>nknown</i>)</td><td class="k">!U</td><td class="n">3</td><td>Cualquier comando inválido</td></tr>
+      <tr><td class="k bad">!M</td><td>Error: no estás en el <b>M</b>odo correcto</td><td class="k">!M</td><td class="n">3</td><td><code>R</code> fuera de modo lectura</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Cómo leer un mensaje con números</h3>
+  <p>Los contadores van en <b>hexadecimal de 2 dígitos</b>. Así, cualquier número de 0 a 255 ocupa siempre 2 caracteres y el mensaje siempre mide lo mismo.</p>
+  <div class="box">
+    <div class="bytes"><span class="cmd">O</span><span class="dat">m</span><span>0</span><span>3</span><span>0</span><span>1</span><span class="end">\n</span></div>
+    <p style="font-size:14.5px"><b>O</b> = acierto · <b>m</b> = tecleaste la m · <b>03</b> = 3 aciertos · <b>01</b> = 1 error · <b>\n</b> = fin. En total son 7 bytes.</p>
+    <div class="bytes"><span class="cmd">S</span><span>1</span><span>A</span><span>0</span><span>F</span><span class="end">\n</span></div>
+    <p style="font-size:14.5px"><b>1A</b> = 1×16 + 10 = <b>26 aciertos</b> · <b>0F</b> = <b>15 errores</b>.</p>
+  </div>
+
+  <div class="codepair">
+    <pre><span class="c">// braille_controller.v: convierte 4 bits en un carácter hex</span>
+function [7:0] hexc;
+    input [3:0] n;
+    hexc = (n &lt; 10) ? (8'h30 + n)   <span class="c">// '0'..'9'</span>
+                    : (8'h37 + n);  <span class="c">// 'A'..'F'</span>
+endfunction</pre>
+    <div class="exp">
+      <p><b>¿Qué hace?</b> Recibe un número de 0 a 15 y devuelve su carácter.</p>
+      <p>Si es menor que 10, le suma <code>0x30</code> (el ASCII de '0'). Así, 3 → '3'.</p>
+      <p>Si es 10 o más, le suma <code>0x37</code>: 10 + 0x37 = 0x41 = 'A'.</p>
+      <p>Como <code>hits</code> tiene 8 bits, se llama dos veces: una con los 4 bits altos y otra con los 4 bajos.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SIMULADOR ================= -->
+<section id="simulador">
+  <div class="eyebrow">Pruébalo</div>
+  <h2>Simulador de comandos</h2>
+  <p>Elige el modo como si movieras los switches, escribe un comando y mira qué bytes salen de la PC y qué contestaría tu FPGA. El simulador sigue la misma lógica que <code>braille_controller.v</code>, simplificada (no hay botones Braille).</p>
+  <div class="sim">
+    <div class="box ctl">
+      <label for="simMode">Switches SW1 SW0
+        <select id="simMode">
+          <option value="I">00 · Reposo</option>
+          <option value="R" selected>01 · Lectura</option>
+          <option value="W">10 · Escritura</option>
+          <option value="P">11 · Práctica</option>
+        </select>
+      </label>
+      <label for="simCmd">Comando (MATLAB agrega el \n)
+        <input id="simCmd" value="Rhola" maxlength="30" autocomplete="off" spellcheck="false">
+      </label>
+      <div class="btns"><button class="primary" id="simSend" type="button">Enviar a la FPGA</button><button id="simClear" type="button">Limpiar</button></div>
+      <div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:6px">Prueba rápida:</div>
+        <div class="btns" id="quick">
+          <button class="chip" type="button">Rhola</button><button class="chip" type="button">N</button><button class="chip" type="button">Q</button>
+          <button class="chip" type="button">S</button><button class="chip" type="button">C</button><button class="chip" type="button">L12</button>
+          <button class="chip" type="button">Rñandú</button><button class="chip" type="button">Rabcdefghijklmnopq</button><button class="chip" type="button">x</button>
+        </div>
+      </div>
+      <div class="state" id="simState"></div>
+    </div>
+    <div class="log" id="simLog" aria-live="polite"></div>
+  </div>
+</section>
+
+<!-- ================= BYTE ================= -->
+<section id="byte">
+  <div class="eyebrow">Por el cable</div>
+  <h2>Cómo viaja un byte</h2>
+  <p>Ejemplo: la letra <code>R</code>. Su número ASCII es 82 = <code>0x52</code> = <code>0101 0010</code> en binario. Como la UART manda primero el bit 0, por el cable sale al revés.</p>
+  <div class="box" style="overflow-x:auto">
+    <svg viewBox="0 0 860 210" style="min-width:680px;width:100%;height:auto" role="img" aria-label="Forma de onda de la letra R">
+      <g font-family="var(--f-mono)" font-size="12" text-anchor="middle" fill="var(--muted)">
+        <text x="65" y="30">reposo</text><text x="135" y="30" fill="var(--tx)">START</text>
+        <text x="205" y="30">bit0</text><text x="275" y="30">bit1</text><text x="345" y="30">bit2</text><text x="415" y="30">bit3</text>
+        <text x="485" y="30">bit4</text><text x="555" y="30">bit5</text><text x="625" y="30">bit6</text><text x="695" y="30">bit7</text>
+        <text x="765" y="30" fill="var(--rx)">STOP</text>
+      </g>
+      <g stroke="var(--soft)" stroke-width="1">
+        <line x1="100" y1="40" x2="100" y2="140"/><line x1="170" y1="40" x2="170" y2="140"/><line x1="240" y1="40" x2="240" y2="140"/>
+        <line x1="310" y1="40" x2="310" y2="140"/><line x1="380" y1="40" x2="380" y2="140"/><line x1="450" y1="40" x2="450" y2="140"/>
+        <line x1="520" y1="40" x2="520" y2="140"/><line x1="590" y1="40" x2="590" y2="140"/><line x1="660" y1="40" x2="660" y2="140"/>
+        <line x1="730" y1="40" x2="730" y2="140"/><line x1="800" y1="40" x2="800" y2="140"/>
+      </g>
+      <text x="22" y="64" font-family="var(--f-mono)" font-size="12" fill="var(--muted)">1</text>
+      <text x="22" y="124" font-family="var(--f-mono)" font-size="12" fill="var(--muted)">0</text>
+      <!-- R = 0x52: bits LSB primero 0 1 0 0 1 0 1 0 -->
+      <path d="M40 60 H100 V120 H240 V60 H310 V120 H450 V60 H520 V120 H590 V60 H660 V120 H730 V60 H840" fill="none" stroke="var(--rx)" stroke-width="3" stroke-linejoin="round"/>
+      <g font-family="var(--f-mono)" font-size="16" font-weight="600" text-anchor="middle" fill="var(--fg)">
+        <text x="135" y="165">0</text><text x="205" y="165">0</text><text x="275" y="165">1</text><text x="345" y="165">0</text><text x="415" y="165">0</text>
+        <text x="485" y="165">1</text><text x="555" y="165">0</text><text x="625" y="165">1</text><text x="695" y="165">0</text><text x="765" y="165">1</text>
+      </g>
+      <text x="430" y="198" text-anchor="middle" font-size="13" fill="var(--muted)" font-family="var(--f-body)">10 bits × 104 µs = 1.04 ms por carácter · "Rhola\n" (6 bytes) tarda 6.25 ms</text>
+    </svg>
+  </div>
+  <div class="idea tx"><b>¿Por qué START y STOP?</b> En reposo la línea vale 1. Cuando baja a 0, el receptor sabe que empieza una letra y arranca a contar tiempo. El STOP (1) deja la línea arriba otra vez, lista para la siguiente bajada. Sin ellos no habría forma de saber dónde empieza cada byte, porque no se manda reloj.</div>
+</section>
+
+<!-- ================= MÓDULOS ================= -->
+<section id="modulos">
+  <div class="eyebrow">El código</div>
+  <h2>Cada módulo, cada cable</h2>
+  <p>En las tablas, <span class="in">IN</span> significa que la señal entra al módulo y <span class="out">OUT</span> que sale. "Bits" es el ancho de la señal.</p>
+</section>
+
+<!-- uart_rx -->
+<section>
+  <div class="box">
+    <div class="modhead"><h3 class="rx">uart_rx.v</h3><span class="pill rx">recibe bits → arma 1 byte</span></div>
+    <p><b>En una frase:</b> mira el pin UART_RX, detecta cuándo empieza una letra, lee sus 8 bits en el momento justo y avisa "¡llegó un byte!".</p>
+    <div class="blk" style="--c:var(--rx)">
+      <div class="side l"><span class="sig">clk</span><span class="sig">rst</span><span class="sig">rx</span></div>
+      <div class="core">uart_rx</div>
+      <div class="side r"><span class="sig">data_out[7:0]</span><span class="sig">data_ready</span></div>
+    </div>
+    <div class="tbl"><table>
+      <thead><tr><th>Señal</th><th></th><th>Bits</th><th>Qué es</th><th>Por qué así</th></tr></thead>
+      <tbody>
+        <tr><td class="k">clk</td><td class="in">IN</td><td class="n">1</td><td>Reloj de 50 MHz</td><td>Todo se cuenta en ciclos de reloj</td></tr>
+        <tr><td class="k">rst</td><td class="in">IN</td><td class="n">1</td><td>Reset: 1 = volver a empezar</td><td>Deja la FSM en IDLE y borra los contadores</td></tr>
+        <tr><td class="k">rx</td><td class="in">IN</td><td class="n">1</td><td>El cable que viene de la PC (pin UART_RX)</td><td>La UART usa un solo cable por dirección</td></tr>
+        <tr><td class="k">data_out</td><td class="out">OUT</td><td class="n">8</td><td>El byte recibido. En el top se llama <code>rx_byte</code></td><td>8 bits = 1 carácter</td></tr>
+        <tr><td class="k">data_ready</td><td class="out">OUT</td><td class="n">1</td><td>Pulso de 1 ciclo: "data_out es nuevo". En el top se llama <code>rx_ready</code></td><td>Si se quedara en 1, el siguiente módulo contaría la misma letra muchas veces</td></tr>
+      </tbody>
+    </table></div>
+    <h4>Variables internas</h4>
+    <div class="tbl"><table>
+      <thead><tr><th>Nombre</th><th>Bits</th><th>Para qué</th></tr></thead>
+      <tbody>
+        <tr><td class="k">CLKS_PER_BIT</td><td class="n">—</td><td>Parámetro = 5208 ciclos por bit (50 MHz / 9600)</td></tr>
+        <tr><td class="k">state</td><td class="n">2</td><td>En qué paso va: IDLE, START, DATA o STOP. 4 estados caben en 2 bits</td></tr>
+        <tr><td class="k">clk_count</td><td class="n">13</td><td>Cuenta ciclos dentro de un bit, de 0 a 5207. 13 bits llegan hasta 8191</td></tr>
+        <tr><td class="k">bit_index</td><td class="n">3</td><td>Qué bit de datos se está leyendo, de 0 a 7. 3 bits = 8 valores</td></tr>
+        <tr><td class="k">rx_data</td><td class="n">8</td><td>Donde se va armando el byte, bit por bit</td></tr>
+        <tr><td class="k">rx_sync_1, rx_sync_2</td><td class="n">1 + 1</td><td>Sincronizador de 2 flip-flops (explicado abajo)</td></tr>
+      </tbody>
+    </table></div>
+    <h4>Las partes importantes del código</h4>
+    <div class="codepair">
+      <pre>rx_sync_1 &lt;= rx;
+rx_sync_2 &lt;= rx_sync_1;</pre>
+      <div class="exp"><p><b>Sincronizador.</b> La señal de la PC no sigue el reloj de la FPGA y puede cambiar justo en un flanco. Eso puede dejar un flip-flop "indeciso" (metaestabilidad). Al pasar la señal por 2 flip-flops, <code>rx_sync_2</code> ya es estable. Todo lo demás usa <code>rx_sync_2</code>, nunca <code>rx</code> directo.</p></div>
+    </div>
+    <div class="codepair">
+      <pre>START: if (clk_count == CLKS_PER_BIT/2 - 1)
+           if (rx_sync_2 == 0) state &lt;= DATA;
+           else                state &lt;= IDLE; <span class="c">// falso</span></pre>
+      <div class="exp"><p><b>Espera medio bit (2604 ciclos)</b> y revisa que la línea siga en 0. Si ya regresó a 1, era ruido y se ignora. Además, desde ese punto cada lectura cae justo a la mitad de cada bit, donde la señal es más estable.</p></div>
+    </div>
+    <div class="codepair">
+      <pre>DATA: if (clk_count == CLKS_PER_BIT - 1)
+        rx_data[bit_index] &lt;= rx_sync_2;</pre>
+      <div class="exp"><p><b>Cada 5208 ciclos lee un bit</b> y lo guarda en la posición <code>bit_index</code>. Empieza en la 0 porque la UART manda primero el LSB.</p></div>
+    </div>
+    <div class="codepair">
+      <pre>STOP: if (rx_sync_2 == 1) begin
+        data_out   &lt;= rx_data;
+        data_ready &lt;= 1;
+      end</pre>
+      <div class="exp"><p><b>Revisa que el STOP sea 1.</b> Solo en ese caso entrega el byte y da el pulso. Si el STOP sale mal, el byte se tira a la basura en lugar de pasar un dato erróneo.</p></div>
+    </div>
+    <div class="idea"><b>Capacidad</b> 1 byte a la vez, sin fila de espera (FIFO). Esto no es problema porque <code>line_rx</code> toma cada byte en el mismo ciclo en que llega.</div>
+  </div>
+</section>
+
+<!-- line_rx -->
+<section>
+  <div class="box">
+    <div class="modhead"><h3 class="rx">line_rx.v</h3><span class="pill rx">junta bytes → 1 línea</span></div>
+    <p><b>En una frase:</b> recibe las letras de una en una. La primera es el comando y las demás son datos, que guarda en el buffer. Cuando llega el Enter, avisa "línea completa".</p>
+    <div class="blk" style="--c:var(--rx)">
+      <div class="side l"><span class="sig">rx_data[7:0]</span><span class="sig">rx_valid</span><span class="sig">ack</span></div>
+      <div class="core">line_rx</div>
+      <div class="side r"><span class="sig">cmd[7:0]</span><span class="sig">len[4:0]</span><span class="sig">overflow</span><span class="sig">line_ready</span><span class="sig">buf_we / waddr / wdata</span></div>
+    </div>
+    <div class="tbl"><table>
+      <thead><tr><th>Señal</th><th></th><th>Bits</th><th>Qué es</th><th>Por qué así</th></tr></thead>
+      <tbody>
+        <tr><td class="k">rx_data</td><td class="in">IN</td><td class="n">8</td><td>El byte que llegó (viene de <code>data_out</code>)</td><td>—</td></tr>
+        <tr><td class="k">rx_valid</td><td class="in">IN</td><td class="n">1</td><td>"Ese byte es nuevo" (viene de <code>data_ready</code>)</td><td>Solo se procesa cuando hay un byte nuevo</td></tr>
+        <tr><td class="k">ack</td><td class="in">IN</td><td class="n">1</td><td>El controlador dice "ya leí tu línea"</td><td>Baja <code>line_ready</code> para aceptar la siguiente línea</td></tr>
+        <tr><td class="k">cmd</td><td class="out">OUT</td><td class="n">8</td><td>La primera letra: R, L, Q, S, C o N</td><td>El controlador la usa para saber qué hacer</td></tr>
+        <tr><td class="k">len</td><td class="out">OUT</td><td class="n">5</td><td>Cuántos datos llegaron después del comando (0 a 16)</td><td>Para contar hasta 16 se necesitan 5 bits (16 = <code>10000</code>). Por eso es <code>[AW:0]</code> y no <code>[AW-1:0]</code></td></tr>
+        <tr><td class="k">overflow</td><td class="out">OUT</td><td class="n">1</td><td>1 = llegaron más de 16 datos</td><td>Así el controlador responde <code>!L</code> en lugar de mostrar media palabra</td></tr>
+        <tr><td class="k">line_ready</td><td class="out">OUT</td><td class="n">1</td><td>"Hay una línea completa esperando"</td><td>Se queda en 1 hasta el <code>ack</code>. Así el controlador no se la pierde aunque esté ocupado</td></tr>
+        <tr><td class="k mem">buf_we</td><td class="out">OUT</td><td class="n">1</td><td>Buffer write enable: "guarda este byte"</td><td>Solo vale 1 para datos de R o L que todavía caben</td></tr>
+        <tr><td class="k mem">buf_waddr</td><td class="out">OUT</td><td class="n">4</td><td>En qué casilla guardar (0 a 15) = <code>len</code> actual</td><td>La 1.ª letra va en la casilla 0, la 2.ª en la 1…</td></tr>
+        <tr><td class="k mem">buf_wdata</td><td class="out">OUT</td><td class="n">8</td><td>Qué guardar = el mismo <code>rx_data</code></td><td>—</td></tr>
+      </tbody>
+    </table></div>
+    <h4>Variables internas</h4>
+    <div class="tbl"><table>
+      <thead><tr><th>Nombre</th><th>Qué significa</th></tr></thead>
+      <tbody>
+        <tr><td class="k">have_cmd</td><td>"Ya tengo el comando." Vale 0 al inicio de cada línea, así el siguiente byte se toma como comando</td></tr>
+        <tr><td class="k">is_term</td><td>"Es terminador": el byte es <code>\n</code> (10) o <code>\r</code> (13)</td></tr>
+        <tr><td class="k">store_cmd</td><td>"Este comando guarda datos": solo R y L</td></tr>
+        <tr><td class="k">accept</td><td>"Acepto el byte": llegó uno nuevo <b>y</b> no hay otra línea esperando</td></tr>
+        <tr><td class="k">LF, CR</td><td>Constantes 8'h0A y 8'h0D</td></tr>
+      </tbody>
+    </table></div>
+    <div class="codepair">
+      <pre>wire accept = rx_valid &amp;&amp; !line_ready;
+
+assign buf_we = accept &amp;&amp; have_cmd &amp;&amp; !is_term
+             &amp;&amp; (len &lt; MAX_LEN) &amp;&amp; store_cmd;</pre>
+      <div class="exp"><p><b>Se guarda en el buffer solo si se cumplen 5 condiciones</b>: el byte es nuevo y aceptado, ya pasó el comando, no es Enter, todavía cabe y el comando es R o L.</p><p>Si una línea sigue esperando (<code>line_ready = 1</code>), los bytes nuevos se ignoran. Por eso MATLAB espera la respuesta antes de mandar otro comando.</p></div>
+    </div>
+    <div class="codepair">
+      <pre>if (is_term)       line_ready &lt;= have_cmd;
+else if (!have_cmd) cmd &lt;= rx_data; <span class="c">// 1er byte</span>
+else if (len &lt; 16)  len &lt;= len + 1;
+else               overflow &lt;= 1;</pre>
+      <div class="exp"><p>Esta es la lógica, resumida:</p><p>• <b>Enter:</b> si hubo comando, la línea está lista. Si no (por ejemplo, el \n de un \r\n), se ignora.</p><p>• <b>Primer byte:</b> es el comando.</p><p>• <b>Los demás:</b> se cuentan hasta 16. Del 17 en adelante se marca overflow.</p></div>
+    </div>
+    <div class="idea"><b>Capacidad</b> Una línea a la vez, con un comando y hasta 16 datos.</div>
+  </div>
+</section>
+
+<!-- char_buffer -->
+<section>
+  <div class="box">
+    <div class="modhead"><h3 class="mem">char_buffer.sv</h3><span class="pill mem">guarda la palabra</span></div>
+    <p><b>En una frase:</b> 16 cajones de 8 bits. <code>line_rx</code> guarda ahí la palabra y el controlador la lee letra por letra.</p>
+    <div class="blk" style="--c:var(--mem)">
+      <div class="side l"><span class="sig">clk</span><span class="sig">wr_en</span><span class="sig">wr_addr[3:0]</span><span class="sig">wr_data[7:0]</span><span class="sig">rd_addr[3:0]</span></div>
+      <div class="core">char_buffer</div>
+      <div class="side r"><span class="sig">rd_data[7:0]</span></div>
+    </div>
+    <div class="tbl"><table>
+      <thead><tr><th>Señal</th><th></th><th>Bits</th><th>Qué es</th></tr></thead>
+      <tbody>
+        <tr><td class="k">wr_en</td><td class="in">IN</td><td class="n">1</td><td>Write enable: 1 = guardar en este ciclo (viene de <code>buf_we</code>)</td></tr>
+        <tr><td class="k">wr_addr</td><td class="in">IN</td><td class="n">4</td><td>Write address: número de cajón, de 0 a 15</td></tr>
+        <tr><td class="k">wr_data</td><td class="in">IN</td><td class="n">8</td><td>Write data: la letra a guardar</td></tr>
+        <tr><td class="k">rd_addr</td><td class="in">IN</td><td class="n">4</td><td>Read address: qué cajón leer (lo pone el controlador)</td></tr>
+        <tr><td class="k">rd_data</td><td class="out">OUT</td><td class="n">8</td><td>Read data: la letra de ese cajón, disponible en el mismo ciclo</td></tr>
+      </tbody>
+    </table></div>
+    <div class="codepair">
+      <pre>reg [7:0] mem [0:15];        <span class="c">// 16 cajones de 8 bits</span>
+always @(posedge clk)
+    if (wr_en) mem[wr_addr] &lt;= wr_data;
+assign rd_data = mem[rd_addr];</pre>
+      <div class="exp"><p>Escribe <b>con reloj</b> y lee <b>sin reloj</b>. La lectura sin reloj le ahorra al controlador un ciclo de espera. Como son solo 128 bits, Quartus la arma con flip-flops sin problema.</p><p>No tiene reset porque el controlador sabe cuántas letras son válidas (<code>word_len</code>) y nunca lee las demás.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- controller -->
+<section>
+  <div class="box">
+    <div class="modhead"><h3>braille_controller.v</h3><span class="pill" style="color:var(--muted)">solo su parte UART</span></div>
+    <p><b>En una frase:</b> es el único módulo que <b>entiende</b> los comandos. Lee la línea, hace lo que pide y prepara la respuesta.</p>
+    <div class="blk" style="--c:var(--fg)">
+      <div class="side l"><span class="sig">line_ready</span><span class="sig">line_cmd</span><span class="sig">line_len</span><span class="sig">line_ovf</span><span class="sig">buf_rdata</span><span class="sig">msg_busy</span></div>
+      <div class="core">controller</div>
+      <div class="side r"><span class="sig">line_ack</span><span class="sig">buf_raddr</span><span class="sig">msg_start</span><span class="sig">msg_len[2:0]</span><span class="sig">msg_data[47:0]</span></div>
+    </div>
+    <div class="tbl"><table>
+      <thead><tr><th>Señal</th><th></th><th>Bits</th><th>Qué es</th><th>Por qué así</th></tr></thead>
+      <tbody>
+        <tr><td class="k">line_ready / cmd / len / ovf</td><td class="in">IN</td><td class="n">1/8/5/1</td><td>Lo que entrega <code>line_rx</code></td><td>—</td></tr>
+        <tr><td class="k">line_ack</td><td class="out">OUT</td><td class="n">1</td><td>Pulso: "ya tomé la línea"</td><td>Libera a <code>line_rx</code> para la siguiente</td></tr>
+        <tr><td class="k mem">buf_raddr</td><td class="out">OUT</td><td class="n">4</td><td>Qué cajón leer. Normalmente <code>char_idx</code>, la letra actual</td><td>Con <code>L</code> lee el 0 y el 1 para armar el número</td></tr>
+        <tr><td class="k mem">buf_rdata</td><td class="in">IN</td><td class="n">8</td><td>La letra leída</td><td>Va a <code>ascii_to_braille</code> → servos</td></tr>
+        <tr><td class="k tx">msg_busy</td><td class="in">IN</td><td class="n">1</td><td>"msg_tx está mandando algo"</td><td>No se puede empezar otro mensaje encima</td></tr>
+        <tr><td class="k tx">msg_start</td><td class="out">OUT</td><td class="n">1</td><td>Pulso: "manda el mensaje"</td><td>—</td></tr>
+        <tr><td class="k tx">msg_len</td><td class="out">OUT</td><td class="n">3</td><td>Cuántos caracteres tiene el mensaje (1 a 6)</td><td>3 bits cuentan hasta 7, y 6 cabe</td></tr>
+        <tr><td class="k tx">msg_data</td><td class="out">OUT</td><td class="n">48</td><td>Los caracteres del mensaje pegados</td><td>6 caracteres × 8 bits = 48 bits</td></tr>
+      </tbody>
+    </table></div>
+    <h4>Variables internas relacionadas</h4>
+    <div class="tbl"><table>
+      <thead><tr><th>Nombre</th><th>Qué es</th></tr></thead>
+      <tbody>
+        <tr><td class="k">cmd_r, len_r, ovf_r</td><td>Copias guardadas (<code>_r</code>) de la línea, hechas antes de dar el ack</td></tr>
+        <tr><td class="k">word_len</td><td>Cuántas letras tiene la palabra cargada. 0 = no hay palabra</td></tr>
+        <tr><td class="k">char_idx</td><td>Qué letra se muestra ahora. NEXT le suma 1</td></tr>
+        <tr><td class="k">rounds_cfg</td><td>Letras por sesión (lo que pones con <code>L</code>). Empieza en 10</td></tr>
+        <tr><td class="k">state</td><td>ST_IDLE, ST_CMD, ST_SHOW, ST_TARGET, ST_SEND, ST_GAP, ST_LDIG2</td></tr>
+      </tbody>
+    </table></div>
+    <h4>El truco de <code>msg_data</code>: ¿por qué parece escrito al revés?</h4>
+    <div class="codepair">
+      <pre>msg_data &lt;= {32'd0, buf_rdata, <span class="h">"D"</span>};
+msg_len  &lt;= 2;</pre>
+      <div class="exp">
+        <p>En una concatenación <code>{ }</code>, lo último queda en los bits más bajos. <code>msg_tx</code> manda primero los bits <code>[7:0]</code>.</p>
+        <p>Entonces <code>"D"</code> queda en <code>[7:0]</code> y sale <b>primero</b>, la letra queda en <code>[15:8]</code> y sale segunda, y los 32 ceros de relleno no se mandan porque <code>msg_len = 2</code>.</p>
+        <div class="bytes"><span class="cmd">D</span><span class="dat">h</span><span class="end">\n</span></div>
+      </div>
+    </div>
+    <div class="codepair">
+      <pre>ST_SEND: if (!msg_busy) begin
+           msg_start &lt;= 1;
+           state     &lt;= ST_GAP;
+         end
+ST_GAP:  state &lt;= ST_IDLE;</pre>
+      <div class="exp"><p><b>SEND</b> espera a que el transmisor esté libre y da la orden.</p><p><b>GAP</b> ("hueco") deja pasar un ciclo para que <code>msg_busy</code> alcance a subir a 1. Sin ese ciclo, el controlador podría ver todavía <code>busy = 0</code> y mandar otro mensaje encima.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- msg_tx -->
+<section>
+  <div class="box">
+    <div class="modhead"><h3 class="tx">msg_tx.v</h3><span class="pill tx">mensaje → bytes uno por uno</span></div>
+    <p><b>En una frase:</b> recibe un mensaje completo (hasta 6 caracteres), se lo pasa a <code>uart_tx</code> letra por letra y al final agrega el Enter.</p>
+    <div class="blk" style="--c:var(--tx)">
+      <div class="side l"><span class="sig">start</span><span class="sig">msg_len[2:0]</span><span class="sig">msg_data[47:0]</span></div>
+      <div class="core">msg_tx<br><span style="font-weight:400;font-size:12px;color:var(--muted)">contiene uart_tx</span></div>
+      <div class="side r"><span class="sig">tx</span><span class="sig">busy</span></div>
+    </div>
+    <div class="tbl"><table>
+      <thead><tr><th>Señal</th><th></th><th>Bits</th><th>Qué es</th></tr></thead>
+      <tbody>
+        <tr><td class="k">start</td><td class="in">IN</td><td class="n">1</td><td>Pulso "empieza" (viene de <code>msg_start</code>)</td></tr>
+        <tr><td class="k">msg_len</td><td class="in">IN</td><td class="n">3</td><td>Cuántos caracteres mandar, sin contar el \n</td></tr>
+        <tr><td class="k">msg_data</td><td class="in">IN</td><td class="n">48</td><td>Los caracteres. El byte 0 está en <code>[7:0]</code></td></tr>
+        <tr><td class="k">tx</td><td class="out">OUT</td><td class="n">1</td><td>El cable hacia la PC (pin UART_TX)</td></tr>
+        <tr><td class="k">busy</td><td class="out">OUT</td><td class="n">1</td><td>1 mientras se manda el mensaje</td></tr>
+      </tbody>
+    </table></div>
+    <h4>Variables internas</h4>
+    <div class="tbl"><table>
+      <thead><tr><th>Nombre</th><th>Qué es</th></tr></thead>
+      <tbody>
+        <tr><td class="k">data_reg, len_reg</td><td>Copia del mensaje al arrancar. Así el controlador puede preparar otro mientras este sale</td></tr>
+        <tr><td class="k">idx</td><td>Qué carácter va saliendo (0, 1, 2…)</td></tr>
+        <tr><td class="k">uart_data, uart_start</td><td>El byte y la orden que se le pasan a <code>uart_tx</code></td></tr>
+        <tr><td class="k">uart_done</td><td>Pulso de <code>uart_tx</code>: "ya terminé ese byte"</td></tr>
+        <tr><td class="k">state</td><td>IDLE → SEND → WAIT → SEND → … → IDLE</td></tr>
+      </tbody>
+    </table></div>
+    <div class="codepair">
+      <pre>SEND: uart_data &lt;= (idx == len_reg) ? 8'h0A
+                               : data_reg[idx*8 +: 8];
+      uart_start &lt;= 1;
+WAIT: if (uart_done)
+        if (idx == len_reg) state &lt;= IDLE;
+        else begin idx &lt;= idx + 1; state &lt;= SEND; end</pre>
+      <div class="exp"><p><code>data_reg[idx*8 +: 8]</code> saca el carácter número <code>idx</code>: con idx = 0 toma los bits 7..0, con idx = 1 los bits 15..8, etc.</p><p>Cuando <code>idx</code> llega a <code>len_reg</code> ya no quedan caracteres, así que manda <code>8'h0A</code> (\n). Por eso con <code>msg_len = 2</code> salen 3 bytes.</p></div>
+    </div>
+    <div class="idea tx"><b>Capacidad</b> 6 caracteres + \n = 7 bytes como máximo, unos 7.3 ms por mensaje.</div>
+  </div>
+</section>
+
+<!-- uart_tx -->
+<section>
+  <div class="box">
+    <div class="modhead"><h3 class="tx">uart_tx.v</h3><span class="pill tx">1 byte → bits por el cable</span></div>
+    <p><b>En una frase:</b> es el espejo de <code>uart_rx</code>. Le das un byte y lo saca por el pin con su START, sus 8 bits y su STOP.</p>
+    <div class="blk" style="--c:var(--tx)">
+      <div class="side l"><span class="sig">clk</span><span class="sig">rst</span><span class="sig">data_in[7:0]</span><span class="sig">tx_start</span></div>
+      <div class="core">uart_tx</div>
+      <div class="side r"><span class="sig">tx</span><span class="sig">tx_busy</span><span class="sig">tx_done</span></div>
+    </div>
+    <div class="tbl"><table>
+      <thead><tr><th>Señal</th><th></th><th>Bits</th><th>Qué es</th></tr></thead>
+      <tbody>
+        <tr><td class="k">data_in</td><td class="in">IN</td><td class="n">8</td><td>El byte a mandar</td></tr>
+        <tr><td class="k">tx_start</td><td class="in">IN</td><td class="n">1</td><td>Pulso "mándalo"</td></tr>
+        <tr><td class="k">tx</td><td class="out">OUT</td><td class="n">1</td><td>El cable. Vale 1 en reposo</td></tr>
+        <tr><td class="k">tx_busy</td><td class="out">OUT</td><td class="n">1</td><td>1 mientras manda</td></tr>
+        <tr><td class="k">tx_done</td><td class="out">OUT</td><td class="n">1</td><td>Pulso al terminar el STOP</td></tr>
+      </tbody>
+    </table></div>
+    <div class="codepair">
+      <pre>IDLE:  tx &lt;= 1;  if (tx_start) tx_data &lt;= data_in;
+START: tx &lt;= 0;                 <span class="c">// 5208 ciclos</span>
+DATA:  tx &lt;= tx_data[bit_index]; <span class="c">// 8 × 5208</span>
+STOP:  tx &lt;= 1; tx_done &lt;= 1;    <span class="c">// 5208 ciclos</span></pre>
+      <div class="exp"><p>Cada estado sostiene el cable durante 5208 ciclos, que es exactamente un bit a 9600 baudios.</p><p>Guarda el byte en <code>tx_data</code> al empezar, así no importa si <code>data_in</code> cambia a la mitad.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- top -->
+<section>
+  <div class="box">
+    <div class="modhead"><h3>braille_top.v</h3><span class="pill" style="color:var(--muted)">conecta todo</span></div>
+    <p>El top solo conecta cables y fija los números con los que trabaja cada módulo. Cambia de nombre algunas señales:</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Nombre en el top</th><th>Sale de</th><th>Entra a</th></tr></thead>
+      <tbody>
+        <tr><td class="k">UART_RX</td><td>pin físico</td><td><code>uart_rx.rx</code></td></tr>
+        <tr><td class="k">rx_byte / rx_ready</td><td><code>uart_rx.data_out / data_ready</code></td><td><code>line_rx.rx_data / rx_valid</code></td></tr>
+        <tr><td class="k">line_cmd, line_len, line_ovf, line_ready</td><td><code>line_rx</code></td><td><code>braille_controller</code></td></tr>
+        <tr><td class="k">line_ack</td><td><code>braille_controller</code></td><td><code>line_rx.ack</code></td></tr>
+        <tr><td class="k">buf_we, buf_waddr, buf_wdata</td><td><code>line_rx</code></td><td><code>char_buffer.wr_*</code></td></tr>
+        <tr><td class="k">buf_raddr / buf_rdata</td><td>controller / char_buffer</td><td>char_buffer / controller</td></tr>
+        <tr><td class="k">msg_start, msg_len, msg_data</td><td><code>braille_controller</code></td><td><code>msg_tx</code></td></tr>
+        <tr><td class="k">msg_busy</td><td><code>msg_tx.busy</code></td><td>controller y <code>LEDR[9]</code> (se prende mientras transmite)</td></tr>
+        <tr><td class="k">UART_TX</td><td><code>msg_tx.tx</code></td><td>pin físico</td></tr>
+      </tbody>
+    </table></div>
+    <pre>parameter CLKS_PER_BIT = 5208,   <span class="c">// 50 MHz / 9600</span>
+parameter MAX_LEN      = 16,     <span class="c">// letras por palabra</span>
+parameter AW           = 4,      <span class="c">// log2(16)</span></pre>
+  </div>
+</section>
+
+<!-- ================= VIAJE ================= -->
+<section id="viaje">
+  <div class="eyebrow">Todo junto</div>
+  <h2>El viaje completo de "Rhi"</h2>
+  <p>Estás en modo lectura y escribes <code>hi</code> en MATLAB. Esto es lo que pasa, en orden:</p>
+  <ol class="steps">
+    <li><div>MATLAB llama a <code>enviar("Rhi")</code>, que manda 4 bytes: <code>R</code>(82) <code>h</code>(104) <code>i</code>(105) <code>\n</code>(10).</div></li>
+    <li><div>El FT232RL convierte el USB en bits por el pin UART_RX. Cada byte tarda 1.04 ms.</div></li>
+    <li><div><code>uart_rx</code> arma <code>R</code> y da un pulso en <code>rx_ready</code>.</div></li>
+    <li><div><code>line_rx</code>: como es el primer byte, <code>cmd = "R"</code>, <code>have_cmd = 1</code> y <code>len = 0</code>.</div></li>
+    <li class="m"><div>Llega <code>h</code>: <code>buf_we = 1</code> y se guarda en la casilla 0. Luego <code>len = 1</code>.</div></li>
+    <li class="m"><div>Llega <code>i</code>: se guarda en la casilla 1 y <code>len = 2</code>.</div></li>
+    <li><div>Llega <code>\n</code>: <code>line_ready = 1</code>.</div></li>
+    <li><div>El controlador, en ST_IDLE, ve <code>line_ready</code>: copia <code>cmd</code> y <code>len</code>, da <code>line_ack</code>, pone <code>char_idx = 0</code> y pasa a ST_CMD.</div></li>
+    <li><div>ST_CMD: es <code>R</code>, estás en lectura, no hay overflow y len = 2. Hace <code>word_len = 2</code> y pasa a ST_SHOW.</div></li>
+    <li><div>ST_SHOW: lee la casilla 0 (<code>h</code>) y <code>ascii_to_braille</code> da <code>010011</code> (puntos 1-2-5). Los servos suben. Prepara <code>msg_data = {.., "h", "D"}</code> con <code>msg_len = 2</code>.</div></li>
+    <li class="t"><div>ST_SEND: <code>msg_busy = 0</code>, así que da <code>msg_start</code>. Pasa por ST_GAP y vuelve a ST_IDLE.</div></li>
+    <li class="t"><div><code>msg_tx</code> manda <code>D</code>, luego <code>h</code>, luego <code>\n</code> a través de <code>uart_tx</code>. Son 3 bytes en unos 3.1 ms.</div></li>
+    <li class="t"><div>MATLAB recibe "Dh", muestra la h y la dice en voz alta.</div></li>
+    <li><div>Presionas NEXT: <code>char_idx = 1</code>, la FPGA muestra la <code>i</code> y manda "Di". Otro NEXT: ya no hay más letras, así que manda "E" y baja todos los servos.</div></li>
+  </ol>
+</section>
+
+<!-- ================= NÚMEROS ================= -->
+<section id="numeros">
+  <div class="eyebrow">Las cuentas</div>
+  <h2>Por qué cada número es el que es</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Número</th><th>Dónde</th><th>La cuenta</th></tr></thead>
+    <tbody>
+      <tr><td class="n">9600</td><td>baudios</td><td>Una velocidad estándar que MATLAB, el FT232RL y el HC-05 aceptan sin configurar nada. Para unas pocas letras sobra velocidad</td></tr>
+      <tr><td class="n">5208</td><td>CLKS_PER_BIT</td><td>50 000 000 ÷ 9600 = 5208.33. Se redondea a 5208, con un error de 0.006 % que no afecta</td></tr>
+      <tr><td class="n">2604</td><td>medio bit en START</td><td>5208 ÷ 2. Es el punto donde se revisa el START para leer siempre en el centro</td></tr>
+      <tr><td class="n">13 bits</td><td>clk_count</td><td>Hay que contar hasta 5207. 2¹² = 4096 no alcanza y 2¹³ = 8192 sí</td></tr>
+      <tr><td class="n">3 bits</td><td>bit_index</td><td>Cuenta los 8 bits de datos, de 0 a 7</td></tr>
+      <tr><td class="n">104 µs</td><td>1 bit</td><td>1 ÷ 9600</td></tr>
+      <tr><td class="n">1.04 ms</td><td>1 carácter</td><td>10 bits (START + 8 + STOP) × 104 µs</td></tr>
+      <tr><td class="n">960</td><td>caracteres/s</td><td>9600 ÷ 10. Es el máximo teórico</td></tr>
+      <tr><td class="n">16</td><td>MAX_LEN</td><td>Suficiente para palabras normales y potencia de 2, así que la dirección cabe exacto en 4 bits</td></tr>
+      <tr><td class="n">4 bits</td><td>AW, direcciones</td><td>Casillas de 0 a 15 = 16 casillas</td></tr>
+      <tr><td class="n">5 bits</td><td>len</td><td>Debe poder valer 16 = <code>10000</code>, y eso necesita 5 bits</td></tr>
+      <tr><td class="n">18 bytes</td><td>línea más larga</td><td>R + 16 letras + \n, unos 18.8 ms</td></tr>
+      <tr><td class="n">48 bits</td><td>msg_data</td><td>El mensaje más largo tiene 6 caracteres (O c h h m m) × 8 bits</td></tr>
+      <tr><td class="n">3 bits</td><td>msg_len</td><td>Debe llegar a 6. 3 bits cuentan hasta 7</td></tr>
+      <tr><td class="n">7 bytes</td><td>respuesta más larga</td><td>6 caracteres + \n, unos 7.3 ms</td></tr>
+      <tr><td class="n">8 bits</td><td>hits, misses</td><td>Hasta 255, mandados como 2 dígitos hex (00 a FF)</td></tr>
+      <tr><td class="n">0 – 99</td><td>comando L</td><td>Se aceptan como máximo 2 dígitos decimales</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ================= FAQ ================= -->
+<section id="faq">
+  <div class="eyebrow">Dudas comunes</div>
+  <h2>Preguntas frecuentes</h2>
+  <div class="faq">
+    <div class="box"><h4>¿Puedo mandar dos comandos seguidos sin esperar?</h4><p>No es buena idea. Si el controlador todavía no da el <code>ack</code> de la primera línea, <code>line_rx</code> ignora los bytes de la segunda. MATLAB lo evita esperando la respuesta.</p></div>
+    <div class="box"><h4>¿Qué pasa si mando un acento (á)?</h4><p>Llega el byte 225, pero <code>ascii_to_braille</code> no lo conoce: la celda queda vacía y te contesta <code>Dá</code> de todos modos.</p></div>
+    <div class="box"><h4>¿Por qué la FPGA no usa el \r?</h4><p>Sí lo acepta como fin de línea. Si llega <code>\r\n</code>, el \n queda como una línea vacía (sin comando) y se ignora.</p></div>
+    <div class="box"><h4>¿Y si los datos de un Q son basura, como "Qxyz"?</h4><p>Solo R y L guardan datos. Con <code>Q</code> el resto se ignora y te contesta el modo igual.</p></div>
+    <div class="box"><h4>¿Cuántas letras puedo leer en total?</h4><p>Las que quieras, pero de 16 en 16: mandas una palabra, la lees hasta la <code>E</code> y mandas la siguiente.</p></div>
+    <div class="box"><h4>¿Por qué contadores en hex y no en decimal?</h4><p>Convertir a hex es casi gratis: se parte en grupos de 4 bits y se usa <code>hexc</code>. Para decimal haría falta dividir entre 10, que gasta mucho hardware. MATLAB convierte de hex a decimal sin esfuerzo.</p></div>
+    <div class="box"><h4>¿Se pueden perder bytes si la FPGA está ocupada?</h4><p>No mientras sigas el protocolo. <code>line_rx</code> toma cada byte en el ciclo en que llega, y la FSM del controlador tarda pocos ciclos (nanosegundos), muchísimo menos que el 1 ms que hay entre bytes.</p></div>
+    <div class="box"><h4>¿Para qué sirve LEDR[9]?</h4><p>Se prende mientras <code>msg_busy = 1</code>, o sea mientras la FPGA le está mandando algo a la PC. Ayuda para depurar.</p></div>
+  </div>
+</section>
+
+</div>
+
+<script>
+(function(){
+  var st = {mode:'R', word:'', idx:0, wlen:0, hits:0, misses:0, rounds:10, target:''};
+  var logEl = document.getElementById('simLog');
+  var modeEl = document.getElementById('simMode');
+  var cmdEl = document.getElementById('simCmd');
+  var stateEl = document.getElementById('simState');
+  var modeName = {I:'reposo', R:'lectura', W:'escritura', P:'práctica'};
+  var supported = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZñÑ ';
+
+  function hx(n){ return (n & 255).toString(16).toUpperCase().padStart(2,'0'); }
+  function vis(ch){ return ch === '\n' ? '\\n' : ch === ' ' ? '␣' : ch; }
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function randLetter(){ var c; do { c = String.fromCharCode(97 + Math.floor(Math.random()*26)); } while (c === st.target); return c; }
+
+  function byteTable(str){
+    var rows = '';
+    for (var i = 0; i < str.length; i++){
+      var code = str.charCodeAt(i);
+      var bad = code > 255;
+      var bin = bad ? '—' : code.toString(2).padStart(8,'0');
+      var wire = bad ? '—' : '0 ' + bin.split('').reverse().join('') + ' 1';
+      rows += '<tr><td>' + esc(vis(str[i])) + '</td><td>' + (bad ? '<span class="bad">no cabe en 1 byte</span>' : code) + '</td><td>' + (bad ? '—' : '0x' + hx(code)) + '</td><td>' + bin + '</td><td>' + wire + '</td></tr>';
+    }
+    return '<div class="btab"><table><thead><tr><th>car.</th><th>dec</th><th>hex</th><th>binario</th><th>en el cable (START·LSB…MSB·STOP)</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
+
+  function add(kind, who, text, why, showBytes){
+    var div = document.createElement('div');
+    div.className = 'ent ' + kind;
+    var html = '<div class="who ' + (kind === 'pc' ? 'rx' : kind === 'fp' ? 'tx' : '') + '">' + who + '</div>';
+    if (text !== null){
+      var full = text + '\n';
+      html += '<div class="bytes' + (kind === 'pc' ? ' r' : '') + '">';
+      for (var i = 0; i < full.length; i++){
+        var cls = i === 0 ? 'cmd' : (i === full.length - 1 ? 'end' : 'dat');
+        html += '<span class="' + cls + '">' + esc(vis(full[i])) + '</span>';
+      }
+      html += '</div>';
+      html += '<div class="why">' + full.length + ' bytes · ' + (full.length * 1.0417).toFixed(2) + ' ms por el cable' + (why ? ' · ' + why : '') + '</div>';
+      if (showBytes) html += byteTable(full);
+    } else if (why){
+      html += '<div class="why">' + why + '</div>';
+    }
+    div.innerHTML = html;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  function fpga(text, why){ add('fp', 'FPGA → PC', text, why, false); }
+  function info(why){ add('info', 'Nota', null, why, false); }
+
+  function renderState(){
+    stateEl.innerHTML =
+      '<span>modo</span><b>' + st.mode + ' (' + modeName[st.mode] + ')</b>' +
+      '<span>palabra</span><b>' + (st.wlen ? esc(st.word) + ' · char_idx=' + st.idx : '—') + '</b>' +
+      '<span>hits / misses</span><b>' + st.hits + ' / ' + st.misses + '</b>' +
+      '<span>rounds_cfg</span><b>' + st.rounds + (st.rounds === 0 ? ' (sin límite)' : '') + '</b>' +
+      (st.mode === 'P' ? '<span>objetivo</span><b>' + (st.target || '—') + '</b>' : '');
+  }
+
+  function setMode(m, silent){
+    st.mode = m; st.wlen = 0; st.word = ''; st.idx = 0;
+    if (m === 'P'){ st.hits = 0; st.misses = 0; }
+    if (!silent){
+      fpga('M' + m, 'la FPGA lo manda sola al detectar el cambio de switches');
+      if (m === 'P'){ st.target = randLetter(); fpga('T' + st.target, 'primera letra de práctica'); }
+    }
+    renderState();
+  }
+
+  function doNext(){
+    if (st.mode === 'R'){
+      if (!st.wlen){ info('NEXT sin palabra cargada: la FPGA no hace nada ni contesta.'); return; }
+      if (st.idx + 1 < st.wlen){ st.idx++; var c = st.word[st.idx]; fpga('D' + c, supported.indexOf(c) >= 0 ? 'char_idx = ' + st.idx : 'char_idx = ' + st.idx + '; carácter sin Braille, la celda queda vacía'); }
+      else { st.wlen = 0; st.word = ''; st.idx = 0; fpga('E', 'fin de palabra; servos abajo'); }
+    } else if (st.mode === 'W'){ fpga('K ', 'NEXT en escritura = espacio'); }
+    else if (st.mode === 'P'){ st.target = randLetter(); fpga('T' + st.target, 'NEXT salta la letra sin contar el intento'); }
+    else { info('En reposo NEXT no hace nada.'); }
+  }
+
+  function send(){
+    var line = cmdEl.value;
+    if (!line.length){ info('Línea vacía: line_rx la ignora (no hay comando).'); return; }
+    add('pc', 'PC → FPGA', line, 'MATLAB agrega el \\n (byte 10)', true);
+    var cmd = line[0], data = line.slice(1), len = data.length;
+    switch (cmd){
+      case 'R':
+        if (st.mode !== 'R'){ fpga('!M', 'R solo funciona con SW = 01 (lectura)'); break; }
+        if (len > 16){ st.wlen = 0; st.word = ''; fpga('!L', len + ' caracteres > 16: overflow, se borra la palabra'); break; }
+        if (len === 0){ fpga('!U', 'R sin palabra'); break; }
+        st.word = data; st.wlen = len; st.idx = 0;
+        var c0 = data[0];
+        fpga('D' + c0, 'guardó ' + len + ' carácter(es) en char_buffer; muestra la casilla 0' + (supported.indexOf(c0) >= 0 ? '' : '. Ese carácter no tiene Braille: celda vacía'));
+        break;
+      case 'L':
+        var dig = /^[0-9]{1,2}$/.test(data);
+        if (!dig){ fpga('!U', 'L necesita 1 o 2 dígitos (0–99)'); break; }
+        st.rounds = parseInt(data, 10);
+        fpga('L' + hx(st.rounds), st.rounds + ' en hex = ' + hx(st.rounds) + (st.rounds === 0 ? ' (sin límite)' : ''));
+        break;
+      case 'Q': fpga('M' + st.mode, 'modo actual: ' + modeName[st.mode]); break;
+      case 'S': fpga('S' + hx(st.hits) + hx(st.misses), hx(st.hits) + ' = ' + st.hits + ' aciertos, ' + hx(st.misses) + ' = ' + st.misses + ' errores'); break;
+      case 'C': st.hits = 0; st.misses = 0; fpga('S0000', 'marcador borrado'); break;
+      case 'N': info('N no tiene respuesta propia: hace lo mismo que el botón NEXT.'); doNext(); break;
+      default: fpga('!U', cmd === cmd.toLowerCase() && cmd !== cmd.toUpperCase() ? 'los comandos van en mayúscula' : 'comando desconocido');
+    }
+    renderState();
+  }
+
+  document.getElementById('simSend').addEventListener('click', send);
+  cmdEl.addEventListener('keydown', function(e){ if (e.key === 'Enter'){ e.preventDefault(); send(); } });
+  document.getElementById('simClear').addEventListener('click', function(){ logEl.innerHTML = ''; info('Registro limpio. Escribe un comando o usa una prueba rápida.'); });
+  modeEl.addEventListener('change', function(){ setMode(modeEl.value, false); });
+  Array.prototype.forEach.call(document.querySelectorAll('#quick button'), function(b){
+    b.addEventListener('click', function(){ cmdEl.value = b.textContent; send(); });
+  });
+
+  // Estado inicial de ejemplo
+  setMode('R', true);
+  info('Ejemplo precargado: la tarjeta está en lectura y MATLAB mandó "Rhola". Prueba N para avanzar.');
+  cmdEl.value = 'Rhola'; send();
+})();
+</script>

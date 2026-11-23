@@ -1,0 +1,1498 @@
+% =====================================================================
+%  Guia de evaluacion: preguntas y respuestas
+%  Proyecto: Sistema bidireccional Texto <-> Braille en FPGA (DE10-Lite)
+%  Compilar:  pdflatex guia_evaluacion.tex   (dos veces)
+% =====================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noshorthands,es-tabla]{babel}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage[most]{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{tikz}
+\usetikzlibrary{automata,positioning,arrows.meta,shapes.geometric,calc,fit,decorations.pathreplacing}
+\usepackage[hidelinks]{hyperref}
+
+% ---------------- Colores ----------------
+\definecolor{tinta}{HTML}{13202B}
+\definecolor{verde}{HTML}{137366}
+\definecolor{verdesuave}{HTML}{DCEFEB}
+\definecolor{ambar}{HTML}{9A520C}
+\definecolor{ambarsuave}{HTML}{F8E6D3}
+\definecolor{rojo}{HTML}{A12A2A}
+\definecolor{rojosuave}{HTML}{F6DEDE}
+\definecolor{azul}{HTML}{1F4E9A}
+\definecolor{azulsuave}{HTML}{E1E9F6}
+\definecolor{gris}{HTML}{5B6874}
+\definecolor{fondocodigo}{HTML}{F4F6F7}
+
+% ---------------- Titulos y encabezado ----------------
+\titleformat{\section}{\Large\bfseries\color{tinta}}{\thesection}{0.8em}{}[\vspace{-0.4em}\textcolor{verde}{\rule{\linewidth}{1pt}}]
+\titleformat{\subsection}{\large\bfseries\color{tinta}}{\thesubsection}{0.7em}{}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{gris}Guía de evaluación \textendash{} Sistema Braille FPGA}
+\fancyhead[R]{\small\color{gris}\leftmark}
+\fancyfoot[C]{\small\thepage}
+
+% ---------------- Codigo ----------------
+\lstdefinestyle{vlog}{
+  language=Verilog, basicstyle=\ttfamily\small,
+  keywordstyle=\color{azul}\bfseries, commentstyle=\color{gris}\itshape,
+  backgroundcolor=\color{fondocodigo}, frame=single, rulecolor=\color{gris!40},
+  framesep=5pt, xleftmargin=6pt, xrightmargin=6pt,
+  breaklines=true, columns=fullflexible, keepspaces=true, showstringspaces=false,
+  literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1 {ñ}{{\~n}}1
+}
+\lstdefinestyle{mat}{style=vlog, language=Matlab}
+\lstset{style=vlog}
+
+% ---------------- Preguntas ----------------
+\newcounter{preg}
+\newcommand{\nivel}[1]{%
+  \ifx#1B\colorbox{verdesuave}{\textcolor{verde}{\scriptsize\bfseries BÁSICA}}\fi
+  \ifx#1M\colorbox{ambarsuave}{\textcolor{ambar}{\scriptsize\bfseries MEDIA}}\fi
+  \ifx#1A\colorbox{rojosuave}{\textcolor{rojo}{\scriptsize\bfseries AVANZADA}}\fi}
+\newcommand{\preg}[2]{\refstepcounter{preg}\par\vspace{0.9em}\noindent
+  {\color{tinta}\bfseries P\thepreg.}~\nivel{#1}~\textbf{#2}\par\vspace{0.3em}}
+\newtcolorbox{resp}{breakable,enhanced,colback=fondocodigo,colframe=verde,
+  boxrule=0pt,leftrule=2.5pt,arc=0pt,left=8pt,right=6pt,top=4pt,bottom=4pt}
+\newtcolorbox{clave}[1][Lo que el profesor quiere escuchar]{breakable,colback=verdesuave,colframe=verde,
+  fonttitle=\bfseries\small,title=#1,arc=1.5mm,boxrule=0.6pt}
+\newtcolorbox{trampa}[1][Cuidado: pregunta trampa]{breakable,colback=ambarsuave,colframe=ambar,
+  fonttitle=\bfseries\small,title=#1,arc=1.5mm,boxrule=0.6pt}
+\newcommand{\cod}[1]{\texttt{#1}}
+\setlength{\emergencystretch}{3em}
+\setlist{itemsep=1pt,topsep=3pt}
+\renewcommand{\arraystretch}{1.2}
+
+% ---------------- Estilos TikZ ----------------
+\tikzset{
+  >=Stealth,
+  st/.style={circle,draw=verde,very thick,fill=verdesuave,minimum size=1.55cm,font=\small\ttfamily\bfseries,align=center},
+  stt/.style={circle,draw=ambar,very thick,fill=ambarsuave,minimum size=1.55cm,font=\small\ttfamily\bfseries,align=center},
+  bx/.style={rectangle,rounded corners=3pt,draw=gris,thick,fill=white,minimum height=0.9cm,minimum width=2.4cm,font=\small\ttfamily,align=center},
+  bxr/.style={bx,draw=verde,fill=verdesuave},
+  bxt/.style={bx,draw=ambar,fill=ambarsuave},
+  bxc/.style={bx,draw=tinta,fill=tinta,text=white},
+  sc/.style={rectangle,rounded corners=4pt,draw=azul,very thick,fill=azulsuave,minimum height=0.8cm,minimum width=1.9cm,font=\scriptsize\ttfamily\bfseries,align=center},
+  lab/.style={font=\scriptsize,align=center},
+  dec/.style={diamond,draw=ambar,thick,fill=ambarsuave,aspect=2.2,inner sep=1pt,font=\scriptsize,align=center},
+  act/.style={rectangle,draw=verde,thick,fill=verdesuave,rounded corners=2pt,font=\scriptsize,align=center,inner sep=4pt}
+}
+
+% =====================================================================
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{2.5cm}
+{\color{verde}\large\bfseries PROYECTO FINAL \textendash{} DE10-LITE\par}
+\vspace{0.6cm}
+{\color{tinta}\Huge\bfseries Guía de evaluación\\[0.2cm]\LARGE Sistema bidireccional Texto $\leftrightarrow$ Braille\par}
+\vspace{0.6cm}
+{\large\color{gris}Banco de preguntas con respuestas, justificaciones y diagramas\par}
+\vspace{1.4cm}
+\begin{minipage}{0.82\textwidth}
+\begin{clave}[Cómo usar esta guía]
+Las preguntas están ordenadas por tema, del sistema completo a cada módulo, y
+terminan con análisis crítico y ejercicios de traza. Cada una tiene un nivel:\\[3pt]
+\nivel{B}\ entendimiento básico \quad \nivel{M}\ funcionamiento y flujo \quad \nivel{A}\ justificación, casos límite y análisis.\\[3pt]
+Las cajas verdes resumen \textbf{lo que el evaluador espera escuchar}; las naranjas
+señalan \textbf{preguntas trampa} o errores comunes. Practica respondiendo en voz
+alta antes de leer la respuesta.
+\end{clave}
+\end{minipage}
+\vfill
+{\color{gris}Archivos evaluados: \cod{braille\_top.v}, \cod{braille\_controller.v}, \cod{uart\_rx.v}, \cod{uart\_tx.v},
+\cod{line\_rx.v}, \cod{msg\_tx.v}, \cod{char\_buffer.sv}, \cod{button\_conditioner.v}, \cod{chord\_capture.v},
+\cod{servo\_controller.v}, \cod{ascii\_to\_braille.v}, \cod{braille\_to\_ascii.v}, \cod{hex7seg.v}, \cod{matlab}\par}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{Visión general y arquitectura}
+
+\preg{B}{Describe en un minuto qué hace tu proyecto.}
+\begin{resp}
+Es un sistema que traduce entre texto y Braille en las dos direcciones usando la
+FPGA de la DE10-Lite. Tiene una celda Braille física de 6 servos, un teclado
+Braille de 6 botones más un botón NEXT, y se comunica por UART a 9600 baudios con
+una interfaz en MATLAB. Tiene tres modos útiles más reposo, elegidos con los
+switches: \textbf{lectura} (la PC manda una palabra y la celda la muestra letra
+por letra), \textbf{escritura} (el usuario teclea Braille y la PC recibe la
+letra) y \textbf{práctica} (la FPGA elige letras al azar, compara la respuesta y
+lleva aciertos y errores).
+\end{resp}
+
+\preg{B}{¿Dónde está la lógica del sistema: en la FPGA o en MATLAB? ¿Por qué?}
+\begin{resp}
+En la FPGA. MATLAB solo muestra, habla, grafica y envía tres comandos (\cod{Q},
+\cod{R}, \cod{L}). La FPGA elige el modo (por switches), traduce, compara, cuenta,
+genera las letras aleatorias y decide cuándo termina una sesión.
+\end{resp}
+\begin{clave}
+Tres razones: (1) el objetivo del curso es el diseño de hardware; (2) la tarjeta
+funciona sola, incluso sin PC, con los LEDs y displays; (3) la FPGA es la
+\emph{única fuente de verdad}: el marcador y el modo nunca pueden quedar
+desincronizados entre la PC y la tarjeta.
+\end{clave}
+
+\preg{M}{Dibuja la arquitectura y explica el camino de los datos.}
+\begin{resp}
+\begin{center}
+\begin{tikzpicture}[node distance=0.5cm and 0.9cm]
+\node[bx,minimum height=5.4cm,minimum width=1.6cm] (pc) {PC\\MATLAB};
+\node[bxr,right=1.7cm of pc.north east,anchor=north west,yshift=-0.2cm] (rx) {uart\_rx};
+\node[bxr,right=of rx] (lrx) {line\_rx};
+\node[bx,below=of lrx] (buf) {char\_buffer};
+\node[bx,below=0.5cm of rx] (btn) {button\_\\conditioner};
+\node[bx,below=of buf] (ch) {chord\_capture};
+\node[bxt,below=3.5cm of rx,minimum width=5.7cm,xshift=1.65cm] (tx) {msg\_tx + uart\_tx};
+\node[bxc,right=1.1cm of lrx.north east,anchor=north west,minimum height=5.4cm,minimum width=2.3cm] (ct) {braille\_\\controller};
+\node[bx,right=0.9cm of ct.north east,anchor=north west] (sv) {servo\_\\controller};
+\node[bx,below=0.5cm of sv] (hx) {hex7seg\\LEDs};
+\node[bx,below=0.5cm of hx] (sw) {switches\\(sync)};
+\draw[->,thick,verde] (pc.east|-rx) -- node[above,lab]{UART\_RX} (rx);
+\draw[->,thick,verde] (rx) -- (lrx);
+\draw[->,thick] (lrx) -- (buf);
+\draw[->,thick,verde] (lrx.east) -- (ct.west|-lrx);
+\draw[->,thick] (buf.east) -- (ct.west|-buf);
+\draw[->,thick] (ch.east) -- (ct.west|-ch);
+\draw[->,thick] (btn.south) |- (ch.west);
+\draw[->,thick,ambar] (ct.west|-tx) -- (tx.east);
+\draw[->,thick,ambar] (tx.west) -- node[above,lab]{UART\_TX} (pc.east|-tx);
+\draw[->,thick] (ct.east|-sv) -- (sv);
+\draw[->,thick] (ct.east|-hx) -- (hx);
+\draw[->,thick] (sw) -- (ct.east|-sw);
+\end{tikzpicture}
+\end{center}
+\textbf{Entrada PC}: \cod{uart\_rx} (bits$\to$byte) $\to$ \cod{line\_rx}
+(bytes$\to$línea; los datos van a \cod{char\_buffer}) $\to$ controller.
+\textbf{Entrada física}: botones $\to$ \cod{button\_conditioner} $\to$
+\cod{chord\_capture} $\to$ controller. \textbf{Salidas}: controller $\to$
+\cod{servo\_controller} (celda), displays/LEDs y \cod{msg\_tx}$\to$\cod{uart\_tx}
+(respuesta a la PC).
+\end{resp}
+
+\preg{M}{¿Cuántos módulos tiene el proyecto y cuál es la responsabilidad de cada uno en una frase?}
+\begin{resp}
+\begin{tabularx}{\linewidth}{>{\ttfamily}l X}
+\toprule
+\normalfont\textbf{Módulo} & \textbf{Responsabilidad} \\
+\midrule
+braille\_top & Conecta todo con los pines y fija los parámetros. \\
+braille\_controller & Decide qué hace el sistema según modo y eventos. \\
+uart\_rx / uart\_tx & Convierten bits del cable en un byte y viceversa. \\
+line\_rx / msg\_tx & Convierten bytes en una línea de comando y un mensaje en bytes. \\
+char\_buffer & Guarda la palabra de hasta 16 caracteres. \\
+button\_conditioner & Sincroniza y quita el rebote de los 7 botones. \\
+chord\_capture & Junta los botones presionados en un patrón (acorde). \\
+servo\_controller & Genera el PWM de los 6 servos. \\
+ascii\_to\_braille / braille\_to\_ascii & Tablas letra$\leftrightarrow$puntos. \\
+hex7seg & Número de 4 bits $\to$ display de 7 segmentos. \\
+\bottomrule
+\end{tabularx}
+Son 13 módulos de Verilog/SystemVerilog más el programa de MATLAB.
+\end{resp}
+
+\preg{M}{¿Qué criterio usaste para dividir el sistema en módulos?}
+\begin{resp}
+\textbf{Una responsabilidad por módulo} y separación por \textbf{niveles de
+abstracción}. En la comunicación hay tres niveles: bits$\leftrightarrow$byte
+(\cod{uart\_rx/tx}), bytes$\leftrightarrow$mensaje (\cod{line\_rx}/\cod{msg\_tx})
+y significado del mensaje (controller). Así cada módulo se prueba por separado,
+se puede cambiar uno sin tocar los demás (por ejemplo, la velocidad UART solo
+afecta a \cod{CLKS\_PER\_BIT}) y el controller no sabe nada de tiempos de bit.
+\end{resp}
+
+\preg{B}{¿Qué es la convención ``bit $i$ = punto $i+1$'' y por qué es importante?}
+\begin{resp}
+En todos los módulos, el bit 0 es el punto 1, el bit 1 el punto 2, y así hasta el
+bit 5 = punto 6. El botón \cod{DOT\_N[i]}, el servo \cod{SERVO[i]}, el LED
+\cod{LEDR[i]} y el bit \cod{i} de los patrones son el mismo punto. Esto permite
+pasar el patrón del teclado al controller y a los servos \textbf{sin reordenar
+bits}, eliminando una fuente común de errores.
+\end{resp}
+
+\preg{B}{¿Qué hardware usa el proyecto y cómo se conecta?}
+\begin{resp}
+DE10-Lite (MAX 10, reloj de 50 MHz); 6 servos SG90 en \cod{SERVO[5:0]}; 6 botones
+externos activos en bajo con pull-up en \cod{DOT\_N[5:0]}; KEY0 (reset) y KEY1
+(NEXT); SW0--SW2 (modo y pista); un FT232RL (USB) o HC-05 (Bluetooth) en
+\cod{UART\_RX}/\cod{UART\_TX} cruzados (el TX de uno al RX del otro); LEDs y
+displays para depuración.
+\end{resp}
+
+% =====================================================================
+\section{Fundamentos de diseño digital aplicados}
+
+\preg{B}{¿Cuál es la diferencia entre lógica combinacional y secuencial? Da un ejemplo de cada una en tu proyecto.}
+\begin{resp}
+La \textbf{combinacional} depende solo de las entradas actuales, no tiene memoria
+ni reloj: \cod{ascii\_to\_braille}, \cod{braille\_to\_ascii}, \cod{hex7seg} (todos
+con \cod{always @(*)}), y la lectura de \cod{char\_buffer}. La
+\textbf{secuencial} depende también del estado guardado y cambia en flancos de
+reloj: \cod{uart\_rx}, los contadores de antirrebote, el contador PWM, la FSM del
+controller (\cod{always @(posedge clk ...)}).
+\end{resp}
+
+\preg{M}{¿Por qué usas \texttt{=} en unos bloques y \texttt{<=} en otros?}
+\begin{resp}
+\cod{=} (bloqueante) en lógica combinacional \cod{always @(*)}: se evalúa en orden,
+como un programa. \cod{<=} (no bloqueante) en lógica secuencial: todos los registros
+toman su nuevo valor \emph{al mismo tiempo} al final del flanco, que es como se
+comporta el hardware real. Mezclarlos en lógica secuencial puede causar
+diferencias entre simulación y síntesis o condiciones de carrera.
+\end{resp}
+\begin{trampa}
+Consecuencia práctica: en \cod{line\_rx}, \cod{buf\_waddr = len} usa el valor
+\textbf{actual} de \cod{len}; el incremento \cod{len <= len + 1} se ve hasta el
+siguiente ciclo. Por eso la primera letra se guarda en la casilla 0 y no en la 1.
+\end{trampa}
+
+\preg{M}{¿Qué es un latch inferido y cómo lo evitas?}
+\begin{resp}
+Si en un \cod{always @(*)} existe un camino donde una salida no se asigna, el
+sintetizador debe ``recordar'' el valor anterior y crea un latch (memoria no
+deseada, sensible a glitches y difícil de analizar en tiempos). Lo evito con un
+\cod{default} en todos los \cod{case} y asignando valores por defecto al inicio
+del bloque (por ejemplo \cod{braille\_out = 0; char\_valid = 1;} en
+\cod{ascii\_to\_braille}).
+\end{resp}
+
+\preg{A}{¿Qué es la metaestabilidad y dónde la previenes?}
+\begin{resp}
+Cuando una señal asíncrona cambia justo dentro de la ventana de setup/hold de un
+flip-flop, su salida puede quedar un tiempo en un valor intermedio antes de
+resolverse a 0 o 1. Si ese valor indeciso se propaga, distintas partes del
+circuito pueden leerlo diferente. Se previene con un \textbf{sincronizador de dos
+flip-flops}: el primero puede quedar metaestable, pero tiene un ciclo completo
+(20 ns) para resolverse antes de que lo muestree el segundo.
+\begin{center}
+\begin{tikzpicture}[node distance=1.4cm]
+\node (in) {\small señal externa};
+\node[bx,minimum width=1.4cm,right=of in] (f1) {FF1};
+\node[bx,minimum width=1.4cm,right=of f1] (f2) {FF2};
+\node[right=of f2] (out) {\small señal estable};
+\draw[->,thick] (in) -- (f1);
+\draw[->,thick] (f1) -- node[above,lab]{puede ser\\metaestable} (f2);
+\draw[->,thick] (f2) -- (out);
+\draw[->] ($(f1.south)+(0,-0.6)$) node[below,lab]{clk} -- (f1.south);
+\draw[->] ($(f2.south)+(0,-0.6)$) node[below,lab]{clk} -- (f2.south);
+\end{tikzpicture}
+\end{center}
+Está en: \cod{uart\_rx} (\cod{rx\_sync\_1/2}), \cod{button\_conditioner}
+(\cod{sync\_ff1/2}) y \cod{braille\_top} para los switches (\cod{sw\_s1/2}).
+\end{resp}
+
+\preg{A}{¿Por qué \texttt{uart\_tx} no tiene sincronizador y \texttt{uart\_rx} sí?}
+\begin{resp}
+Porque la entrada de \cod{uart\_tx} (\cod{data\_in}, \cod{tx\_start}) viene de
+\cod{msg\_tx}, que usa el mismo reloj de 50 MHz: ya es síncrona. En cambio, la
+línea \cod{rx} viene de la PC, que tiene su propio reloj y no guarda ninguna
+relación de fase con el de la FPGA.
+\end{resp}
+
+\preg{M}{¿Qué es un pulso de un ciclo y cómo se genera en tu código?}
+\begin{resp}
+Una señal que vale 1 durante exactamente un periodo de reloj (20 ns). Se usa para
+avisar un evento \emph{una sola vez}. Patrón usado en todo el proyecto: asignar 0
+como valor por defecto al inicio de cada ciclo y 1 solo en el caso que lo genera.
+\begin{lstlisting}
+data_ready <= 1'b0;                 // por defecto, cada ciclo
+...
+STOP: if (rx_sync_2) data_ready <= 1'b1;   // solo aqui
+\end{lstlisting}
+Ejemplos: \cod{data\_ready}, \cod{tx\_done}, \cod{press\_pulse}, \cod{chord\_valid},
+\cod{line\_ack}, \cod{msg\_start}, \cod{uart\_start}.
+\end{resp}
+
+\preg{M}{¿Qué tipo de reset usas? ¿Es síncrono o asíncrono? ¿Activo en alto o en bajo?}
+\begin{resp}
+Asíncrono (\cod{always @(posedge clk or posedge rst)}) y activo en alto. El botón
+KEY0 es activo en bajo, así que el top lo invierte: \cod{rst = \textasciitilde KEY[0]}.
+Durante el reset todos los registros toman un valor conocido: FSMs en IDLE, líneas
+TX en 1 (reposo UART), contadores en cero.
+\end{resp}
+\begin{trampa}[Pregunta de rigor]
+\textbf{¿Tiene algún riesgo ese reset?} Sí: la \emph{liberación} de un reset
+asíncrono también es asíncrona; si ocurre cerca de un flanco de reloj, algunos
+flip-flops pueden salir del reset un ciclo antes que otros. La práctica
+recomendada es un \emph{sincronizador de reset} (afirmación asíncrona, liberación
+síncrona). En este proyecto no está implementado; es una mejora válida que conviene
+mencionar.
+\end{trampa}
+
+\preg{B}{¿Qué es un \texttt{parameter} y para qué te sirvió?}
+\begin{resp}
+Una constante configurable de un módulo que el módulo padre puede sobrescribir al
+instanciarlo con \cod{\#(.NOMBRE(valor))}. Todos los parámetros del sistema
+(\cod{CLKS\_PER\_BIT}, \cod{DEBOUNCE\_COUNT}, \cod{PULSE\_*}, \cod{MAX\_LEN},
+\cod{FEEDBACK\_DELAY}) se fijan en \cod{braille\_top}. Así se configura todo en
+un solo lugar y se garantiza que los módulos que comparten un valor
+(\cod{MAX\_LEN} en \cod{line\_rx}, \cod{char\_buffer} y el controller) usen el
+mismo. También facilita simular con valores pequeños (por ejemplo, un antirrebote
+de 10 ciclos en lugar de 500\,000).
+\end{resp}
+\begin{trampa}
+Los valores por defecto dentro de un módulo \textbf{no se usan} si el top los
+sobrescribe. Los anchos de pulso reales de los servos son los de \cod{braille\_top},
+no los de \cod{servo\_controller}.
+\end{trampa}
+
+% =====================================================================
+\section{Módulos básicos: tablas, displays y memoria}
+
+\preg{B}{¿Qué es una LUT y cuáles hay en tu proyecto?}
+\begin{resp}
+Una \emph{Look-Up Table}: una tabla donde a cada entrada le corresponde una
+salida fija. Se implementa con un \cod{case} combinacional. Hay tres:
+\cod{ascii\_to\_braille} (letra $\to$ 6 puntos), \cod{braille\_to\_ascii}
+(6 puntos $\to$ letra) y \cod{hex7seg} (4 bits $\to$ 7 segmentos).
+\end{resp}
+
+\preg{M}{¿Qué caracteres soporta \texttt{ascii\_to\_braille} y qué pasa con los demás?}
+\begin{resp}
+\textbf{a--z}, \textbf{A--Z} (mismo patrón que la minúscula, porque no se implementa
+el signo de mayúscula de Braille), \textbf{ñ/Ñ} en Latin-1 (\cod{0xF1}/\cod{0xD1},
+puntos 1-2-4-5-6) y el \textbf{espacio} (celda vacía, válido). Cualquier otro
+carácter cae en \cod{default}: celda vacía y \cod{char\_valid = 0}. En modo lectura
+la FPGA igual responde \cod{D} + ese carácter, pero no levanta ningún punto.
+\end{resp}
+
+\preg{A}{¿Por qué el patrón \texttt{000000} es válido en \texttt{ascii\_to\_braille} (espacio) pero inválido en \texttt{braille\_to\_ascii}?}
+\begin{resp}
+En la dirección letra$\to$puntos, el espacio se representa naturalmente como una
+celda vacía. En la dirección puntos$\to$letra, \cod{chord\_capture} nunca entrega
+\cod{000000} (solo entrega cuando hubo al menos un botón), y si fuera válido
+``no presionar nada'' podría interpretarse como espacio. Por eso el espacio en
+escritura se genera con el botón \textbf{NEXT}, de forma explícita.
+\end{resp}
+
+\preg{M}{¿Por qué la ñ debe llegar en Latin-1 y no en UTF-8?}
+\begin{resp}
+En UTF-8 la ñ ocupa dos bytes (\cod{0xC3 0xB1}); la FPGA procesa un byte por
+carácter y vería dos caracteres desconocidos. En Latin-1 ocupa uno solo
+(\cod{0xF1}), que es el que está en la tabla. MATLAB lo garantiza con
+\cod{uint8(char(txt))}, que produce un byte por carácter (241 para la ñ).
+\end{resp}
+
+\preg{B}{¿Cómo funciona \texttt{hex7seg} y por qué los valores parecen invertidos?}
+\begin{resp}
+Es un \cod{case} de 16 entradas que devuelve \cod{seg = \{g,f,e,d,c,b,a\}}. Los
+displays de la DE10-Lite son \textbf{activos en bajo}: un segmento se enciende con 0.
+Por eso el 0 es \cod{1000000} (todo encendido menos \cod{g}). La entrada
+\cod{blank} apaga el display completo (\cod{1111111}), usada en HEX4.
+\end{resp}
+
+\preg{M}{¿Por qué los aciertos se ven en hexadecimal en los displays?}
+\begin{resp}
+\cod{hits} es de 8 bits y se parte en dos nibbles: \cod{hits[7:4]} a HEX3 y
+\cod{hits[3:0]} a HEX2. Cada \cod{hex7seg} muestra 0--F, así que 26 aciertos se
+ven como \cod{1A}. Mostrarlo en decimal requeriría convertir binario a BCD
+(divisiones entre 10 o el algoritmo \emph{double dabble}); se priorizó la
+simplicidad.
+\end{resp}
+
+\preg{M}{Explica \texttt{char\_buffer}: tamaño, puertos y tipo de lectura.}
+\begin{resp}
+Memoria de 16 casillas de 8 bits (\cod{reg [7:0] mem [0:15]}, 128 bits) con un
+puerto de escritura y otro de lectura independientes. \textbf{Escritura síncrona}
+(\cod{always @(posedge clk) if (wr\_en) mem[wr\_addr] <= wr\_data}), hecha por
+\cod{line\_rx}. \textbf{Lectura combinacional} (\cod{assign rd\_data = mem[rd\_addr]}),
+hecha por el controller: el dato está disponible en el mismo ciclo en que se pone
+la dirección.
+\end{resp}
+
+\preg{A}{¿Qué implicación tiene la lectura combinacional en la síntesis? ¿Por qué no tiene reset?}
+\begin{resp}
+Los bloques de memoria M9K de la MAX 10 solo permiten lectura \textbf{síncrona}
+(registrada). Con lectura combinacional, Quartus no puede usarlos y construye la
+memoria con flip-flops y multiplexores en lógica. Para 128 bits el costo es
+despreciable y se gana simplicidad (no hay un ciclo de latencia que manejar en la
+FSM). Para memorias de miles de bytes convendría lectura síncrona.\par
+No tiene reset porque no lo necesita: el controller lleva \cod{word\_len}, la
+cantidad de caracteres válidos, y nunca lee más allá. Además, las memorias con
+reset no se pueden mapear a bloques de RAM.
+\end{resp}
+
+\preg{B}{¿Por qué \texttt{AW = 4}?}
+\begin{resp}
+\emph{Address Width}: bits de dirección. $2^4 = 16$ casillas = \cod{MAX\_LEN}. Para
+32 caracteres serían \cod{MAX\_LEN = 32, AW = 5}, cambiando solo el top (y el
+\cod{MAX\_LEN} de MATLAB).
+\end{resp}
+
+% =====================================================================
+\section{UART: capa física}
+
+\preg{B}{¿Qué es UART y qué significa 9600 8N1?}
+\begin{resp}
+\emph{Universal Asynchronous Receiver-Transmitter}: comunicación serial sin línea
+de reloj; ambos lados acuerdan la velocidad. 9600 = bits por segundo (baudios);
+8N1 = 8 bits de datos, sin paridad (\emph{No parity}), 1 bit de stop.
+\end{resp}
+
+\preg{M}{Dibuja la trama de un byte. ¿Por qué hay bit de START y de STOP?}
+\begin{resp}
+Ejemplo con \cod{'R'} = \cod{0x52} = \cod{0101\,0010}, enviado LSB primero:
+\begin{center}
+\begin{tikzpicture}[xscale=1.05,yscale=0.9]
+\foreach \i/\l in {0/reposo,1/START,2/D0,3/D1,4/D2,5/D3,6/D4,7/D5,8/D6,9/D7,10/STOP,11/reposo}{
+  \draw[gris!40] (\i,0) -- (\i,1.4);
+  \node[lab] at (\i+0.5,-0.35) {\l};}
+\draw[gris!40] (12,0) -- (12,1.4);
+\foreach \i/\b in {2/0,3/1,4/0,5/0,6/1,7/0,8/1,9/0}{\node[font=\scriptsize\ttfamily] at (\i+0.5,1.65) {\b};}
+\draw[very thick,verde] (0,1) -- (1,1) -- (1,0) -- (3,0) -- (3,1) -- (4,1) -- (4,0) -- (6,0) -- (6,1) -- (7,1) -- (7,0) -- (8,0) -- (8,1) -- (9,1) -- (9,0) -- (10,0) -- (10,1) -- (12,1);
+\foreach \i in {1,...,10}{\fill[ambar] (\i+0.5,0.5) circle (1.6pt);}
+\draw[decorate,decoration={brace,mirror,amplitude=4pt}] (2,-0.7) -- (3,-0.7) node[midway,below=4pt,lab]{1 bit = 5208 ciclos = 104\,µs};
+\draw[decorate,decoration={brace,mirror,amplitude=4pt}] (1,-1.4) -- (11,-1.4) node[midway,below=4pt,lab]{10 bits = 1.04 ms};
+\end{tikzpicture}
+\end{center}
+La línea descansa en 1. El \textbf{START} (0) crea un flanco que marca el inicio
+del byte y sincroniza al receptor (no hay reloj compartido). El \textbf{STOP} (1)
+deja la línea en reposo para que el siguiente START sea detectable, y permite
+detectar errores de trama.
+\end{resp}
+
+\preg{B}{¿De dónde sale 5208 y por qué el contador es de 13 bits?}
+\begin{resp}
+$50\,000\,000 / 9600 = 5208.33 \to 5208$ ciclos por bit. El error es
+$0.33/5208.33 \approx 0.006\%$, muy por debajo de la tolerancia de UART
+(del orden de $\pm 2$--$5\%$ acumulado en una trama de 10 bits). El contador
+debe llegar a 5207: $2^{12} = 4096$ no alcanza, $2^{13} = 8192$ sí.
+\end{resp}
+
+\preg{M}{Dibuja la FSM de \texttt{uart\_rx} y explica cada transición.}
+\begin{resp}
+\begin{center}
+\begin{tikzpicture}[->,node distance=2.5cm,auto]
+\node[st,initial,initial text=] (I) {IDLE};
+\node[st,right=of I] (S) {START};
+\node[st,right=of S] (D) {DATA};
+\node[st,right=of D] (P) {STOP};
+\path (I) edge node[lab,above]{rx = 0} (S)
+      (S) edge node[lab,above]{½ bit\\rx = 0} (D)
+      (S) edge[bend left=45] node[lab,below]{½ bit, rx = 1 (ruido)} (I)
+      (D) edge[loop above] node[lab]{cada 5208 ciclos\\guarda bit; bit\_index++} (D)
+      (D) edge node[lab,above]{bit 7} (P)
+      (P) edge[bend right=-60] node[lab,below]{1 bit: si rx = 1 $\Rightarrow$ data\_out, data\_ready} (I);
+\end{tikzpicture}
+\end{center}
+\textbf{IDLE}: espera que la línea sincronizada baje a 0. \textbf{START}: espera
+medio bit (2604 ciclos) y confirma el 0; si ya es 1, era ruido y regresa.
+\textbf{DATA}: cada 5208 ciclos guarda \cod{rx\_data[bit\_index] <= rx\_sync\_2};
+tras el bit 7 pasa a STOP. \textbf{STOP}: un bit después, si la línea vale 1,
+copia el byte a \cod{data\_out} y da el pulso \cod{data\_ready}; si vale 0 (error de
+trama), descarta el byte.
+\end{resp}
+
+\preg{A}{¿Por qué se espera medio bit en START? ¿Qué pasaría si se esperara uno completo?}
+\begin{resp}
+Para muestrear en el \textbf{centro} de cada bit, donde la señal es más estable y
+lejos de las transiciones. Después de medio bit se está en el centro del START;
+sumando 5208 ciclos se cae en el centro de D0, D1, etc. Además sirve como filtro
+de ruido: un pico corto no sobrevive medio bit.\par
+Si se esperara un bit completo, cada muestra caería justo en el borde entre bits:
+cualquier pequeña diferencia de reloj entre PC y FPGA, o el retraso del
+sincronizador, haría leer el bit vecino. El margen de error sería casi nulo.
+\end{resp}
+
+\preg{A}{¿Cuánto error de reloj tolera tu receptor?}
+\begin{resp}
+El receptor se resincroniza en cada START y la última muestra es la del STOP, a
+$9.5$ bits del flanco de inicio. Para no salirse del bit, el desplazamiento
+acumulado debe ser menor a medio bit: $9.5 \cdot \varepsilon < 0.5 \Rightarrow
+\varepsilon < 5.3\%$ (en la práctica se considera $\pm 2$--$3\%$ por cada lado,
+porque los dos relojes contribuyen). El error de redondeo de 5208 es $0.006\%$,
+y el sincronizador de 2 ciclos (40 ns) es despreciable frente a 104\,µs.
+\end{resp}
+
+\preg{M}{¿Por qué los bits se guardan con \texttt{rx\_data[bit\_index]} empezando en 0?}
+\begin{resp}
+Porque la UART transmite primero el bit menos significativo (LSB). El primer bit
+que llega es el bit 0 del byte. \cod{uart\_tx} hace lo mismo con
+\cod{tx <= tx\_data[bit\_index]}, así ambos lados coinciden.
+\end{resp}
+
+\preg{M}{¿Por qué existe \texttt{rx\_data} si ya existe \texttt{data\_out}?}
+\begin{resp}
+\cod{rx\_data} es el registro donde se \emph{arma} el byte bit por bit.
+\cod{data\_out} solo se actualiza cuando el byte está completo \emph{y} el STOP es
+válido. Así la salida nunca muestra un byte a medias ni uno con error de trama.
+\end{resp}
+
+\preg{M}{Dibuja la FSM de \texttt{uart\_tx}. ¿Por qué copia el byte en \texttt{tx\_data}?}
+\begin{resp}
+\begin{center}
+\begin{tikzpicture}[->,node distance=2.5cm,auto]
+\node[stt,initial,initial text=] (I) {IDLE\\[-2pt]\tiny tx=1};
+\node[stt,right=of I] (S) {START\\[-2pt]\tiny tx=0};
+\node[stt,right=of S] (D) {DATA\\[-2pt]\tiny tx=bit};
+\node[stt,right=of D] (P) {STOP\\[-2pt]\tiny tx=1};
+\path (I) edge node[lab,above]{tx\_start\\tx\_data$\leftarrow$data\_in} (S)
+      (S) edge node[lab,above]{5208\\ciclos} (D)
+      (D) edge[loop above] node[lab]{8 bits × 5208} (D)
+      (D) edge node[lab,above]{bit 7} (P)
+      (P) edge[bend right=-60] node[lab,below]{5208 ciclos: tx\_done (pulso), tx\_busy = 0} (I);
+\end{tikzpicture}
+\end{center}
+Copia el byte porque transmitirlo tarda 1.04 ms; si \cod{data\_in} cambiara en ese
+tiempo, el byte saldría mezclado. Con la copia, la entrada puede cambiar sin
+afectar la transmisión en curso.
+\end{resp}
+
+\preg{A}{Compara \texttt{uart\_rx} y \texttt{uart\_tx}. ¿Por qué START dura distinto en cada uno?}
+\begin{resp}
+\begin{tabularx}{\linewidth}{l X X}
+\toprule
+& \cod{uart\_rx} & \cod{uart\_tx} \\
+\midrule
+Dirección & cable $\to$ byte & byte $\to$ cable \\
+Sincronizador & sí (entrada externa) & no (entrada síncrona) \\
+START & ½ bit (posicionarse al centro) & 1 bit (sostener el nivel) \\
+Pulso de aviso & \cod{data\_ready} & \cod{tx\_done} \\
+Verificación & revisa el STOP & --- \\
+\bottomrule
+\end{tabularx}
+El receptor necesita \emph{alinearse} con los centros; el transmisor necesita
+\emph{generar} bits de duración exacta.
+\end{resp}
+
+\preg{M}{¿Qué pasa si llega un byte con el STOP en 0?}
+\begin{resp}
+Es un error de trama (baudios distintos, ruido, cable mal conectado). El receptor
+no levanta \cod{data\_ready}: el byte se descarta y vuelve a IDLE. Se prefiere perder
+un byte a entregar uno incorrecto. No hay notificación de error hacia arriba
+(sería una mejora).
+\end{resp}
+
+% =====================================================================
+\section{UART: enmarcado y protocolo}
+
+\preg{B}{¿La UART envía paquetes? ¿Cuántos bytes manda a la vez?}
+\begin{resp}
+La UART manda \textbf{un byte por trama}; no conoce paquetes. Los ``paquetes'' son
+una convención del protocolo propio: una \textbf{línea} de texto que termina en
+\cod{\textbackslash n} (byte 10). \cod{Rhola\textbackslash n} son 6 tramas seguidas.
+\end{resp}
+
+\preg{M}{Explica el formato del protocolo y por qué se eligió así.}
+\begin{resp}
+Cada mensaje es texto ASCII: \textbf{una letra de comando + datos opcionales +
+\cod{\textbackslash n}}. Ventajas: largo variable sin tener que enviar el largo
+primero; legible en cualquier monitor serial (depuración fácil); el
+\cod{\textbackslash n} es un delimitador inequívoco; MATLAB lo maneja nativamente
+con \cod{configureTerminator(s,"LF")}.
+\end{resp}
+
+\preg{B}{Lista los comandos PC$\to$FPGA y las respuestas.}
+\begin{resp}
+\begin{tabularx}{\linewidth}{>{\ttfamily}l X >{\ttfamily}l l}
+\toprule
+\normalfont\textbf{Cmd} & \textbf{Significado} & \normalfont\textbf{Resp.} & \textbf{¿MATLAB?} \\
+\midrule
+R<texto> & Read: cargar y mostrar palabra (solo modo lectura) & D<c> & Sí \\
+L<n> & Letras por sesión de práctica, 0--99 (0 = sin límite) & L<hh> & Sí \\
+Q & Query: modo actual & M<m> & Sí \\
+S & Score: marcador & S<hh><mm> & Pruebas \\
+C & Clear: borrar marcador & S0000 & Pruebas \\
+N & Next: igual que el botón & según modo & Pruebas \\
+\bottomrule
+\end{tabularx}
+Errores: \cod{!L} (más de 16 caracteres), \cod{!U} (comando desconocido o mal
+formado), \cod{!M} (\cod{R} fuera de modo lectura).
+\end{resp}
+
+\preg{B}{Lista los mensajes FPGA$\to$PC.}
+\begin{resp}
+\cod{M<m>} modo (I, R, W, P); \cod{D<c>} letra mostrada; \cod{E} fin de palabra;
+\cod{K<c>} letra tecleada (\cod{?} inválida, espacio = NEXT); \cod{T<c>} letra
+objetivo; \cod{O<c><hh><mm>} acierto; \cod{X<c><hh><mm>} error; \cod{F<hh><mm>}
+fin de sesión; \cod{L<hh>} confirmación; \cod{S<hh><mm>} marcador; \cod{!L !U !M}
+errores. Todos terminan en \cod{\textbackslash n} y miden de 2 a 7 bytes.
+\end{resp}
+
+\preg{A}{¿Por qué los contadores se envían como dos caracteres hexadecimales y no como un byte?}
+\begin{resp}
+Si se enviara el valor crudo, \cod{hits = 10} produciría el byte \cod{0x0A}, que es
+\cod{\textbackslash n}: el receptor cortaría el mensaje. Igual con 13
+(\cod{\textbackslash r}) o 0. En hexadecimal cada dígito es \cod{'0'--'9'}
+(48--57) o \cod{'A'--'F'} (65--70); ninguno coincide con un delimitador.
+Además: longitud fija (siempre 2 caracteres), legible, y en hardware es casi
+gratis (partir en nibbles y sumar un desplazamiento); en decimal habría que
+dividir entre 10.
+\begin{lstlisting}
+function [7:0] hexc; input [3:0] n;
+  hexc = (n < 10) ? (8'h30 + n) : (8'h37 + n);   // '0'..'9' | 'A'..'F'
+endfunction
+\end{lstlisting}
+Costo: 2 bytes extra por contador ($\approx$2 ms por mensaje), irrelevante frente al
+ritmo humano.
+\end{resp}
+
+\preg{M}{Explica el flujo de \texttt{line\_rx}.}
+\begin{resp}
+\begin{center}
+\begin{tikzpicture}[node distance=0.55cm and 0.9cm,->]
+\node[act] (b) {llega byte\\(rx\_valid)};
+\node[dec,below=of b] (lr) {¿line\_ready\\= 1?};
+\node[act,right=of lr] (ig) {ignorar};
+\node[dec,below=of lr] (t) {¿\textbackslash n o \textbackslash r?};
+\node[dec,right=of t] (hc) {¿have\_cmd?};
+\node[act,right=of hc] (ok) {line\_ready = 1};
+\node[dec,below=of t] (fc) {¿have\_cmd\\= 0?};
+\node[act,right=of fc] (cm) {cmd = byte\\len = 0, ovf = 0};
+\node[dec,below=of fc] (le) {¿len < 16?};
+\node[act,right=of le] (da) {len + 1\\(R/L: al buffer)};
+\node[act,below=of le] (of) {overflow = 1};
+\draw (b) -- (lr); \draw (lr) -- node[lab,above]{sí} (ig);
+\draw (lr) -- node[lab,left]{no} (t); \draw (t) -- node[lab,above]{sí} (hc);
+\draw (hc) -- node[lab,above]{sí} (ok);
+\draw (t) -- node[lab,left]{no} (fc); \draw (fc) -- node[lab,above]{sí} (cm);
+\draw (fc) -- node[lab,left]{no} (le); \draw (le) -- node[lab,above]{sí} (da);
+\draw (le) -- node[lab,left]{no} (of);
+\end{tikzpicture}
+\end{center}
+El primer byte de cada línea es el comando; los siguientes son datos (solo los de
+\cod{R} y \cod{L} se escriben en el buffer, en la casilla \cod{len}); el
+terminador levanta \cod{line\_ready} si hubo comando (las líneas vacías, como el
+\cod{\textbackslash n} de un \cod{\textbackslash r\textbackslash n}, se ignoran). Más
+de 16 datos marcan \cod{overflow}.
+\end{resp}
+
+\preg{A}{¿Por qué \texttt{len} tiene 5 bits si el buffer tiene direcciones de 4?}
+\begin{resp}
+\cod{len} cuenta cuántos datos llegaron y debe poder valer 16 (palabra llena),
+que en binario es \cod{10000}: 5 bits (\cod{[AW:0]}). La dirección del buffer usa
+solo los 4 bits bajos (\cod{len[3:0]}), porque cuando \cod{len = 16} ya no se escribe
+(\cod{len < MAX\_LEN} es falso).
+\end{resp}
+
+\preg{A}{Escribe y explica la condición de \texttt{buf\_we}.}
+\begin{resp}
+\begin{lstlisting}
+assign buf_we = accept && have_cmd && !is_term && (len < MAX_LEN) && store_cmd;
+\end{lstlisting}
+Cinco condiciones: el byte es nuevo y no hay línea pendiente (\cod{accept});
+ya pasó el comando (es un dato); no es terminador; cabe; y el comando es \cod{R} o
+\cod{L}. Es combinacional para que el byte se escriba en el mismo ciclo en que
+llega, usando el \cod{len} actual como dirección.
+\end{resp}
+
+\preg{A}{Explica el handshake \texttt{line\_ready}/\texttt{ack}. ¿Por qué \texttt{line\_ready} es un nivel y no un pulso?}
+\begin{resp}
+\begin{center}
+\begin{tikzpicture}[yscale=0.55,xscale=0.85]
+\node[lab,anchor=east] at (-0.2,4.5) {rx\_valid};
+\node[lab,anchor=east] at (-0.2,2.5) {line\_ready};
+\node[lab,anchor=east] at (-0.2,0.5) {ack};
+\draw[thick,verde] (0,4) -- (1,4) -- (1,5) -- (1.2,5) -- (1.2,4) -- (2.5,4) -- (2.5,5) -- (2.7,5) -- (2.7,4) -- (4,4) -- (4,5) -- (4.2,5) -- (4.2,4) -- (12,4);
+\node[lab] at (4.1,5.6) {\textbackslash n};
+\draw[thick,azul] (0,2) -- (4.4,2) -- (4.4,3) -- (8,3) -- (8,2) -- (12,2);
+\draw[thick,ambar] (0,0) -- (7.8,0) -- (7.8,1) -- (8,1) -- (8,0) -- (12,0);
+\draw[dashed,gris] (4.4,-0.4) -- (4.4,5.8);
+\draw[dashed,gris] (7.8,-0.4) -- (7.8,5.8);
+\node[lab] at (6.1,3.6) {esperando al controller};
+\node[lab] at (10,1.6) {acepta otra línea};
+\end{tikzpicture}
+\end{center}
+Al terminar una línea, \cod{line\_rx} levanta \cod{line\_ready} y \textbf{la
+mantiene} hasta que el controller, en ST\_IDLE, copia \cod{cmd/len/ovf} y responde con
+el pulso \cod{ack}. Si fuera un pulso de un ciclo y el controller estuviera ocupado
+(por ejemplo en ST\_SEND), la línea se perdería. Mientras \cod{line\_ready = 1}, los
+bytes nuevos se descartan (\cod{accept = rx\_valid \&\& !line\_ready}); por eso la PC
+espera la respuesta antes de enviar otro comando.
+\end{resp}
+
+\preg{M}{Dibuja la FSM de \texttt{msg\_tx} y explica \texttt{data\_reg[idx*8 +: 8]}.}
+\begin{resp}
+\begin{center}
+\begin{tikzpicture}[->,node distance=3cm,auto]
+\node[stt,initial,initial text=] (I) {IDLE};
+\node[stt,right=of I] (S) {SEND};
+\node[stt,right=of S] (W) {WAIT};
+\path (I) edge node[lab,above]{start: copia mensaje\\idx = 0, busy = 1} (S)
+      (S) edge[bend left=20] node[lab,above]{uart\_data, uart\_start} (W)
+      (W) edge[bend left=20] node[lab,below]{uart\_done y idx < len\\idx++} (S)
+      (W) edge[loop right] node[lab]{espera} (W)
+      (W) edge[bend left=55] node[lab,below]{uart\_done y idx = len: busy = 0} (I);
+\end{tikzpicture}
+\end{center}
+\cod{data\_reg[idx*8 +: 8]} es un \emph{indexed part-select}: ``8 bits empezando en
+el bit \cod{idx·8}''. Con \cod{idx = 0} toma \cod{[7:0]}, con 1 toma \cod{[15:8]},
+etc. Cuando \cod{idx == len\_reg} ya no hay caracteres y envía \cod{8'h0A}
+(\cod{\textbackslash n}). Por eso con \cod{msg\_len = 2} salen 3 bytes.
+\end{resp}
+
+\preg{A}{En \texttt{msg\_data <= \{32'd0, buf\_rdata, "D"\}}, ¿por qué la \texttt{"D"} va al final si se envía primero?}
+\begin{resp}
+En una concatenación de Verilog el último elemento ocupa los bits menos
+significativos. \cod{"D"} queda en \cod{msg\_data[7:0]}, que es el byte 0, el primero
+que envía \cod{msg\_tx}. La letra queda en \cod{[15:8]} (segundo byte). Los 32 ceros
+rellenan hasta 48 bits y no se envían porque \cod{msg\_len = 2}.
+\end{resp}
+
+\preg{A}{¿Por qué \texttt{msg\_tx} copia el mensaje? ¿Qué ganas?}
+\begin{resp}
+Un mensaje tarda hasta 7.3 ms ($\approx$365\,000 ciclos). Con la copia en
+\cod{data\_reg}, el controller sale de ST\_SEND en 2 ciclos y queda libre para
+atender botones o preparar otra respuesta en \cod{msg\_data} sin corromper la que
+se está enviando. Desacopla un proceso de nanosegundos (controller) de uno de
+milisegundos (cable).
+\end{resp}
+
+\preg{M}{¿Por qué existen \texttt{ST\_SEND} y \texttt{ST\_GAP} en el controller?}
+\begin{resp}
+\textbf{ST\_SEND} espera \cod{msg\_busy = 0} antes de dar \cod{msg\_start}; si
+\cod{msg\_tx} está ocupado, se queda ahí. \textbf{ST\_GAP} agrega un ciclo porque
+\cod{msg\_busy} es un registro: sube un ciclo después de \cod{start}. Sin GAP, el
+controller podría volver a IDLE, preparar otro mensaje y ver todavía
+\cod{msg\_busy = 0}, disparando un segundo \cod{start} que \cod{msg\_tx} ignoraría
+(está en SEND), y ese mensaje se perdería.
+\end{resp}
+
+\preg{M}{¿Cuántos bytes guarda y cuántos maneja cada módulo de la UART?}
+\begin{resp}
+\begin{tabularx}{\linewidth}{>{\ttfamily}l X X}
+\toprule
+\normalfont\textbf{Módulo} & \textbf{Guarda} & \textbf{Maneja por mensaje} \\
+\midrule
+uart\_rx & 1 byte (más el que arma) & 1 byte por trama \\
+line\_rx & 1 byte (\cod{cmd}) + contador & 2 a 18 bytes por línea \\
+char\_buffer & 16 bytes & datos de R/L \\
+controller & \cod{cmd\_r} (1) + \cod{msg\_data} (6) & --- \\
+msg\_tx & \cod{data\_reg} (6) + \cod{uart\_data} (1) & 2 a 7 bytes \\
+uart\_tx & 1 byte & 1 byte por trama \\
+\bottomrule
+\end{tabularx}
+\end{resp}
+
+\preg{A}{¿Qué pasa si la PC envía dos comandos seguidos sin esperar respuesta?}
+\begin{resp}
+Depende del tiempo. El controller da \cod{ack} en el primer ciclo en ST\_IDLE, unos
+pocos ciclos después del \cod{\textbackslash n}; un byte nuevo tarda 1.04 ms en
+llegar, así que en la práctica el segundo comando casi siempre se acepta. El riesgo
+real está si el controller estuviera ocupado en ST\_SEND esperando a que
+\cod{msg\_tx} termine un mensaje largo: \cod{line\_ready} seguiría arriba y los
+bytes del segundo comando que lleguen en ese tiempo se descartarían, produciendo una
+línea mal formada. El protocolo, y MATLAB, lo evitan esperando la respuesta.
+\end{resp}
+
+\preg{M}{Traza completa: ¿qué pasa cuando MATLAB envía \texttt{Rhola} en modo lectura?}
+\begin{resp}
+\begin{center}
+\begin{tikzpicture}[yscale=0.62]
+\node[bx,minimum width=2cm] (p) at (0,0) {MATLAB};
+\node[bxc,minimum width=2cm] (f) at (8.2,0) {FPGA};
+\draw[gris,dashed] (0,-0.6) -- (0,-9.6);
+\draw[gris,dashed] (8.2,-0.6) -- (8.2,-9.6);
+\draw[->,thick,verde] (0,-1.4) -- node[above,lab]{\ttfamily Rhola\textbackslash n (6 bytes, 6.25 ms)} (8.2,-1.4);
+\node[lab,anchor=west] at (8.4,-2.2) {uart\_rx $\to$ line\_rx: cmd=R,\\h,o,l,a $\to$ casillas 0--3};
+\node[lab,anchor=west] at (8.4,-3.6) {controller: ack, word\_len=4,\\ST\_SHOW: 'h'$\to$010011 (servos)};
+\draw[<-,thick,ambar] (0,-4.8) -- node[above,lab]{\ttfamily Dh\textbackslash n} (8.2,-4.8);
+\node[lab,anchor=east] at (-0.2,-5.4) {muestra H y la dice};
+\node[lab,anchor=west] at (8.4,-6.4) {NEXT: char\_idx = 1};
+\draw[<-,thick,ambar] (0,-6.9) -- node[above,lab]{\ttfamily Do\textbackslash n} (8.2,-6.9);
+\node[lab,anchor=west] at (8.4,-8.0) {... NEXT tras la última};
+\draw[<-,thick,ambar] (0,-8.8) -- node[above,lab]{\ttfamily E\textbackslash n (servos abajo)} (8.2,-8.8);
+\end{tikzpicture}
+\end{center}
+\end{resp}
+
+% =====================================================================
+\section{Entrada física: botones y acordes}
+
+\preg{B}{¿Qué tres problemas resuelve \texttt{button\_conditioner}?}
+\begin{resp}
+(1) \textbf{Rebote}: los contactos mecánicos vibran unos milisegundos y una
+presión parecería varias. (2) \textbf{Asincronía}: el botón no sigue el reloj
+(riesgo de metaestabilidad). (3) \textbf{Lógica activa en bajo}: los botones dan 0
+al presionar; el módulo invierte para que 1 = presionado.
+\end{resp}
+
+\preg{A}{Explica el algoritmo de antirrebote con un diagrama de tiempo.}
+\begin{resp}
+\begin{center}
+\begin{tikzpicture}[yscale=0.55,xscale=0.9]
+\node[lab,anchor=east] at (-0.2,4.5) {botón (crudo)};
+\node[lab,anchor=east] at (-0.2,2.5) {contador};
+\node[lab,anchor=east] at (-0.2,0.5) {pressed};
+\draw[thick,gris] (0,5) -- (1,5) -- (1,4) -- (1.3,4) -- (1.3,5) -- (1.5,5) -- (1.5,4) -- (1.7,4) -- (1.7,5) -- (1.9,5) -- (1.9,4) -- (12,4);
+\draw[thick,azul] (0,2) -- (1,2) -- (1.3,2.3) -- (1.3,2) -- (1.5,2) -- (1.7,2.3) -- (1.7,2) -- (1.9,2) -- (7,3) -- (7,2) -- (12,2);
+\draw[thick,verde] (0,0) -- (7,0) -- (7,1) -- (12,1);
+\draw[dashed,gris] (1.9,-0.4) -- (1.9,5.6);
+\draw[dashed,gris] (7,-0.4) -- (7,5.6);
+\draw[<->] (1.9,5.6) -- node[above,lab]{estable 10 ms = 500\,000 ciclos} (7,5.6);
+\node[lab] at (1.45,3.2) {rebotes:\\se reinicia};
+\end{tikzpicture}
+\end{center}
+Cada botón tiene su contador. Si el valor sincronizado coincide con el aceptado
+(\cod{buttons\_pressed}), el contador se reinicia. Si difiere, cuenta; solo cuando
+llega a 500\,000 ciclos seguidos (10 ms) se acepta el cambio. Un rebote devuelve el
+valor al aceptado y reinicia el conteo. Al aceptar una presión se genera
+\cod{press\_pulse} de un ciclo.
+\end{resp}
+
+\preg{M}{¿Por qué 10 ms y por qué el contador es de 19 bits?}
+\begin{resp}
+Los rebotes típicos de botones mecánicos duran menos de 5--10 ms; 10 ms los cubre
+y sigue siendo imperceptible para una persona. $10\text{ ms} \times 50\text{ MHz}
+= 500\,000$; $2^{19} = 524\,288 \geq 500\,000$ (con 18 bits, 262\,144, no alcanza).
+\end{resp}
+
+\preg{M}{¿Por qué \texttt{button\_conditioner} entrega dos salidas distintas?}
+\begin{resp}
+\cod{buttons\_pressed} (nivel) indica qué botones están presionados \emph{ahora}:
+lo necesita \cod{chord\_capture} para saber cuáles se presionan juntos.
+\cod{press\_pulse} (pulso) marca el instante de la presión: lo necesita NEXT para
+avanzar \emph{una sola vez} por presión. Si NEXT usara el nivel, mantenerlo
+presionado avanzaría en cada ciclo de reloj.
+\end{resp}
+
+\preg{M}{¿Cómo sabe la FPGA qué botones se presionan al mismo tiempo?}
+\begin{resp}
+Cada botón es un bit de \cod{buttons\_pressed[5:0]}; el vector completo muestra los
+seis a la vez. El problema es que los dedos nunca presionan todo en el mismo
+instante; eso lo resuelve \cod{chord\_capture}.
+\end{resp}
+
+\preg{A}{Explica \texttt{chord\_capture} con un diagrama de tiempo. ¿Por qué OR y por qué entregar al soltar?}
+\begin{resp}
+\begin{center}
+\begin{tikzpicture}[yscale=0.5,xscale=0.9]
+\foreach \y/\l in {6.5/punto 1,4.5/punto 2,2.5/punto 5,0.5/chord\_valid}{\node[lab,anchor=east] at (-0.2,\y) {\l};}
+\draw[thick,verde] (0,6) -- (1,6) -- (1,7) -- (6,7) -- (6,6) -- (12,6);
+\draw[thick,verde] (0,4) -- (2,4) -- (2,5) -- (7.5,5) -- (7.5,4) -- (12,4);
+\draw[thick,verde] (0,2) -- (3,2) -- (3,3) -- (9,3) -- (9,2) -- (12,2);
+\draw[thick,ambar] (0,0) -- (9.1,0) -- (9.1,1) -- (9.4,1) -- (9.4,0) -- (12,0);
+\node[lab] at (4.5,8) {acc = 000001 $\to$ 000011 $\to$ 010011 (se conserva al soltar)};
+\node[lab] at (10.8,1.5) {chord = 010011 (h)};
+\end{tikzpicture}
+\end{center}
+\begin{lstlisting}
+if (dots_pressed != 0) acc <= acc | dots_pressed;      // acumula
+else if (acc != 0) begin chord <= acc; chord_valid <= 1; acc <= 0; end
+\end{lstlisting}
+El \textbf{OR} conserva cualquier punto que se haya presionado aunque sea un instante,
+aunque se suelte antes que otros. Se entrega \textbf{al soltar todos} porque es el
+único momento en que se sabe que el usuario terminó la letra. Como la entrada ya
+viene sin rebote, la liberación es limpia y no genera acordes falsos.
+\end{resp}
+
+\preg{A}{¿Qué limitaciones tiene ese método?}
+\begin{resp}
+Si el usuario presiona un punto por error y lo suelta, queda incluido en el acorde
+(no hay forma de ``borrar'' un punto a mitad de la letra). Si nunca se sueltan todos,
+no se entrega nada. Son compromisos aceptables para un teclado Braille de
+estilo Perkins, donde la letra se forma presionando simultáneamente.
+\end{resp}
+
+% =====================================================================
+\section{Salida física: servos y PWM}
+
+\preg{B}{¿Cómo se controla un servo SG90?}
+\begin{resp}
+Con PWM de 50 Hz (periodo de 20 ms). La duración del pulso en alto, entre $\sim$1 y
+2 ms, define el ángulo; 1.5 ms es el centro.
+\begin{center}
+\begin{tikzpicture}[yscale=0.6,xscale=0.55]
+\node[lab,anchor=east] at (-0.2,2.5) {punto arriba};
+\node[lab,anchor=east] at (-0.2,0.5) {punto abajo};
+\draw[thick,verde] (0,2) -- (0,3) -- (1.16,3) -- (1.16,2) -- (20,2) -- (20,3) -- (21.16,3) -- (21.16,2) -- (23,2);
+\draw[thick,ambar] (0,0) -- (0,1) -- (1.4,1) -- (1.4,0) -- (20,0) -- (20,1) -- (21.4,1) -- (21.4,0) -- (23,0);
+\draw[<->] (0,-0.6) -- node[below,lab]{20 ms = 1\,000\,000 ciclos} (20,-0.6);
+\node[lab,anchor=west] at (1.5,3.3) {1.16 ms (izquierda)};
+\node[lab,anchor=west] at (1.6,1.3) {1.40 ms};
+\end{tikzpicture}
+\end{center}
+\end{resp}
+
+\preg{M}{¿Cómo genera \texttt{servo\_controller} seis PWM distintos con un solo contador?}
+\begin{resp}
+Un contador \cod{pwm\_count} va de 0 a 999\,999 (20 ms) y se reinicia. Cada canal
+compara: \cod{servo\_pwm[i] = (pwm\_count < ancho\_i)}, donde \cod{ancho\_i} es el de
+``arriba'' si su bit vale 1 y el de ``abajo'' si vale 0. Como todos tienen el mismo
+periodo, un contador compartido basta y ahorra seis contadores de 20 bits. El
+\cod{generate for} fabrica seis copias del comparador.
+\end{resp}
+
+\preg{A}{¿Por qué los servos izquierdos y derechos tienen anchos distintos?}
+\begin{resp}
+Están montados en espejo, enfrentados. Para que ambos ``levanten'' el punto, deben
+girar en sentidos opuestos: la izquierda acorta el pulso (70\,000$\to$58\,000, de
+1.40 a 1.16 ms) y la derecha lo alarga (80\,000$\to$100\,000, de 1.60 a 2.00 ms).
+Los valores salieron de una calibración física y se fijan en \cod{braille\_top}.
+\end{resp}
+
+\preg{A}{¿Por qué el patrón se copia en \texttt{pattern\_active} solo al inicio de cada periodo?}
+\begin{resp}
+Si \cod{cell\_pattern} cambiara a mitad de un pulso, ese pulso podría salir con una
+duración intermedia (ni la de arriba ni la de abajo), provocando un tirón del
+servo. Copiándolo solo cuando \cod{pwm\_count} se reinicia, cada pulso sale completo
+con un solo valor. El costo es hasta 20 ms de retraso, imperceptible.
+\end{resp}
+
+\preg{M}{¿Por qué el contador PWM es de 20 bits? ¿Cuánto equivale un grado?}
+\begin{resp}
+Debe llegar a 999\,999: $2^{20} = 1\,048\,576$. A 50 MHz, 1 ms = 50\,000 cuentas; si
+el rango de 1 a 2 ms cubre $\sim$180°, un grado son $\approx 50\,000/180 \approx 278$
+cuentas.
+\end{resp}
+
+\preg{M}{¿Dónde se decide realmente el movimiento de los servos?}
+\begin{resp}
+En tres lugares: \textbf{qué} puntos suben lo decide el controller
+(\cod{cell\_pattern}); \textbf{cuánto} giran lo fijan los parámetros
+\cod{PULSE\_*} del top; \textbf{cómo} se genera la señal lo hace
+\cod{servo\_controller}. El top solo conecta.
+\end{resp}
+
+% =====================================================================
+\section{El controlador: \texttt{braille\_controller}}
+
+\preg{M}{Dibuja la máquina de estados del controller.}
+\begin{resp}
+\begin{center}
+\begin{tikzpicture}[->,auto]
+\node[sc] (I) at (0,0) {ST\_IDLE};
+\node[sc] (C) at (3.6,2.2) {ST\_CMD};
+\node[sc] (L) at (7.6,2.2) {ST\_LDIG2};
+\node[sc] (S) at (3.6,0) {ST\_SHOW};
+\node[sc] (T) at (3.6,-2.2) {ST\_TARGET};
+\node[sc] (N) at (11.4,0) {ST\_SEND};
+\node[sc] (G) at (11.4,-2.4) {ST\_GAP};
+\draw (I) -- node[lab,above left]{line\_ready} (C);
+\draw (I) -- node[lab,above]{NEXT (lect.)} (S);
+\draw (I) -- node[lab,below left]{need\_target} (T);
+\draw (C) -- node[lab,above]{L de 2 dígitos} (L);
+\draw (C) -- node[lab,left]{R válido} (S);
+\draw (C.south east) to[out=-15,in=165] node[lab,above,pos=0.6]{resto} (N.north west);
+\draw (L) -- (N);
+\draw (S) -- node[lab,above]{D c} (N);
+\draw (T.east) to[out=0,in=-150] node[lab,below]{T c} (N.south west);
+\draw (N) edge[loop right] node[lab]{busy} (N);
+\draw (N) -- node[lab,right]{msg\_start} (G);
+\draw (G.south) -- ++(0,-0.7) -| node[lab,below,pos=0.25]{1 ciclo} (I.south);
+\draw (I.north) -- ++(0,3.4) -| node[lab,above,pos=0.25]{modo, acorde, NEXT, F: mensaje directo} (N.north);
+\end{tikzpicture}
+\end{center}
+Siete estados codificados en 3 bits. Casi todos los caminos terminan en
+ST\_SEND$\to$ST\_GAP$\to$ST\_IDLE, porque casi todo genera un mensaje para MATLAB.
+El comando \cod{N} vuelve directo a IDLE marcando \cod{next\_pend}.
+\end{resp}
+
+\preg{A}{¿En qué orden atiende los eventos ST\_IDLE y por qué ese orden?}
+\begin{resp}
+\begin{tabularx}{\linewidth}{c l X}
+\toprule
+\textbf{Prioridad} & \textbf{Evento} & \textbf{Acción} \\
+\midrule
+1 & Línea de la PC (\cod{line\_ready}) & ack, copia y ST\_CMD \\
+2 & Cambio de switches & nuevo modo, limpia, \cod{M} + modo \\
+3 & Fin de sesión (\cod{need\_final}) & \cod{F} + marcador \\
+4 & Letra nueva (\cod{need\_target}) & LFSR, ST\_TARGET \\
+5 & Acorde (\cod{chord\_pend}) & \cod{K}, o compara y \cod{O}/\cod{X} \\
+6 & NEXT (\cod{next\_pend}) & según modo \\
+\bottomrule
+\end{tabularx}
+La PC primero, porque mientras \cod{line\_ready = 1} el receptor bloquea bytes nuevos:
+liberarlo pronto evita perder datos. El cambio de modo antes que los acordes, para
+no interpretar un acorde con las reglas del modo viejo. El fin de sesión antes que
+pedir otra letra. Se atiende \textbf{un evento por vuelta}; los demás esperan.
+\end{resp}
+
+\preg{A}{¿Cómo se garantiza que no se pierda un acorde o un NEXT mientras el controller está ocupado?}
+\begin{resp}
+Fuera del \cod{case}, en cada ciclo:
+\begin{lstlisting}
+if (chord_valid) begin chord_pend <= 1; chord_reg <= chord; end
+if (next_pulse)  next_pend  <= 1;
+\end{lstlisting}
+El evento se guarda como \emph{pendiente} aunque la FSM esté en otro estado, y se
+atiende al volver a ST\_IDLE. Además el acorde se atiende con
+\cod{chord\_pend \&\& !chord\_valid}, es decir, al menos un ciclo después de capturarlo,
+cuando \cod{chord\_reg} ya tiene el valor estable.
+\end{resp}
+
+\preg{M}{¿Qué hace el controller al cambiar los switches?}
+\begin{resp}
+Compara \cod{sw\_mode} con \cod{sw\_last}; si cambió: actualiza \cod{mode}, pone la
+celda en vacío, borra la palabra (\cod{word\_len = 0}), limpia todas las banderas de
+práctica y pendientes, y envía \cod{M} + modo. Si el nuevo modo es práctica, además
+borra \cod{hits} y \cod{misses} y pide la primera letra (\cod{need\_target = 1}).
+\end{resp}
+
+\preg{M}{Explica el modo lectura de principio a fin.}
+\begin{resp}
+\cod{R<texto>} $\to$ ST\_CMD valida: modo lectura (si no, \cod{!M}), sin overflow (si
+no, \cod{!L} y borra la palabra), largo $>$ 0 (si no, \cod{!U}). Guarda
+\cod{word\_len} y va a ST\_SHOW con \cod{char\_idx = 0}: lee la casilla, la convierte con
+\cod{ascii\_to\_braille}, pone \cod{cell\_pattern} y envía \cod{D} + carácter. Cada
+NEXT incrementa \cod{char\_idx} y repite ST\_SHOW; tras la última, envía \cod{E},
+pone \cod{word\_len = 0} y baja los servos.
+\end{resp}
+
+\preg{M}{Explica el modo escritura.}
+\begin{resp}
+Cada acorde se convierte con \cod{braille\_to\_ascii(chord\_reg)} y se envía
+\cod{K} + letra (\cod{?} si el patrón no existe); también se guarda en
+\cod{last\_chord} para los LEDs. NEXT envía \cod{K} + espacio. Los servos quedan
+abajo.
+\end{resp}
+
+\preg{A}{Explica el modo práctica completo, con su flujo.}
+\begin{resp}
+\begin{center}
+\begin{tikzpicture}[node distance=0.5cm and 0.8cm,->]
+\node[act] (a) {entrar a práctica\\hits = misses = 0};
+\node[act,below=of a] (b) {LFSR elige letra\\envía T + letra};
+\node[act,below=of b] (c) {espera acorde\\(pista si SW2 = 1)};
+\node[dec,below=of c] (d) {¿acorde =\\patrón?};
+\node[act,left=1.2cm of d] (e) {hits + 1\\envía O};
+\node[act,right=1.2cm of d] (f) {misses + 1\\envía X};
+\node[act,below=1.3cm of d] (g) {muestra respuesta 2 s};
+\node[dec,below=of g] (h) {¿último\\intento?};
+\node[act,right=1.2cm of h] (i) {envía F\\espera NEXT};
+\draw (a) -- (b); \draw (b) -- (c); \draw (c) -- (d);
+\draw (d) -- node[lab,above]{sí} (e); \draw (d) -- node[lab,above]{no} (f);
+\draw (e) |- (g); \draw (f) |- (g); \draw (g) -- (h);
+\draw (h) -- node[lab,above]{sí} (i);
+\draw (h.west) -- ++(-2.4,0) |- node[lab,above,pos=0.75]{no} (b.west);
+\draw (i.north) -- ++(0,0.5) -| node[lab,right,pos=0.3]{NEXT: nueva sesión} ++(1.3,0) |- (a.east);
+\draw[dashed] (c.east) -- ++(2.8,0) node[lab,right]{NEXT: salta\\(no cuenta)};
+\end{tikzpicture}
+\end{center}
+\end{resp}
+
+\preg{A}{¿Cómo se decide si un intento es acierto o error?}
+\begin{resp}
+\begin{lstlisting}
+wire [7:0] lut_in = (mode == MODE_PRACT) ? target : buf_rdata;
+ascii_to_braille A2B (.ascii_in(lut_in), .braille_out(lut_pattern), ...);
+wire is_hit = (chord_reg == lut_pattern);
+\end{lstlisting}
+En práctica, la LUT convierte la letra objetivo en su patrón correcto y se compara
+bit a bit con el acorde: deben coincidir los 6 puntos. Solo se evalúa si
+\cod{target\_valid = 1} (hay una letra esperando respuesta); al responder se pone en
+0, así que un segundo acorde durante los 2 s de retroalimentación se ignora.
+\end{resp}
+
+\preg{M}{¿Por qué una sola instancia de \texttt{ascii\_to\_braille} sirve para lectura y práctica?}
+\begin{resp}
+Porque los dos modos son excluyentes. El multiplexor \cod{lut\_in} elige la entrada
+según el modo: \cod{buf\_rdata} en lectura, \cod{target} en práctica. Se ahorra una
+segunda tabla.
+\end{resp}
+
+\preg{A}{Explica cómo funciona el LFSR, con diagrama.}
+\begin{resp}
+\begin{center}
+\begin{tikzpicture}[scale=0.62]
+\foreach \i in {0,...,15}{
+  \pgfmathtruncatemacro{\b}{15-\i}
+  \draw[thick,fill=white] (\i,0) rectangle (\i+1,1);
+  \node[font=\tiny\ttfamily] at (\i+0.5,0.5) {\b};}
+\foreach \i in {0,2,3,5}{\fill[verdesuave] (\i,0) rectangle (\i+1,1); \draw[thick] (\i,0) rectangle (\i+1,1);
+  \pgfmathtruncatemacro{\b}{15-\i}\node[font=\tiny\ttfamily] at (\i+0.5,0.5) {\b};
+  \draw[thick,verde] (\i+0.5,1) -- (\i+0.5,2);}
+\draw[thick,verde] (0.5,2) -- (17.5,2);
+\node[circle,draw=verde,thick,fill=white,inner sep=1pt,font=\small] (x) at (17.5,1.2) {$\oplus$};
+\draw[->,thick,verde] (17.5,2) -- (x);
+\draw[->,thick,verde] (x.south) |- (16,0.5);
+\draw[->,thick,gris] (15.5,-0.4) -- node[below,lab]{recorre a la izquierda en cada ciclo} (0.5,-0.4);
+\end{tikzpicture}
+\end{center}
+\begin{lstlisting}
+lfsr <= {lfsr[14:0], lfsr[15] ^ lfsr[13] ^ lfsr[12] ^ lfsr[10]};
+\end{lstlisting}
+Registro de 16 bits que en cada ciclo se recorre una posición y mete por la derecha
+el XOR de los bits 15, 13, 12 y 10. Esas \emph{taps} corresponden a un polinomio
+primitivo ($x^{16}+x^{14}+x^{13}+x^{11}+1$), por lo que recorre los $2^{16}-1 =
+65\,535$ estados no nulos antes de repetirse (\emph{maximal length}). La semilla
+\cod{0xACE1} no puede ser 0: con todo en cero el XOR siempre da 0 y se bloquea.
+\end{resp}
+
+\preg{A}{Si la secuencia del LFSR es fija, ¿por qué las letras parecen aleatorias?}
+\begin{resp}
+El LFSR avanza 50 millones de veces por segundo y la letra se toma en el instante
+en que hace falta (cuando el usuario termina un intento y pasan los 2 s, o presiona
+NEXT). Ese instante depende del tiempo humano, que nadie controla con precisión de
+nanosegundos. Es pseudoaleatorio, pero impredecible en la práctica.
+\end{resp}
+\begin{trampa}
+Después de un reset la secuencia arranca igual, pero la letra elegida depende de
+cuánto tiempo pasa hasta que se necesita, así que no se repite la misma sesión.
+\end{trampa}
+
+\preg{A}{¿Cómo se convierte el valor del LFSR en una letra? ¿La distribución es uniforme?}
+\begin{resp}
+\begin{lstlisting}
+wire [4:0] r5       = lfsr[4:0];                     // 0..31
+wire [4:0] rnd_idx  = (r5 >= 26) ? (r5 - 26) : r5;   // 0..25
+wire [7:0] rnd_char = 8'h61 + rnd_idx;               // 'a'..'z'
+wire [7:0] new_char = (rnd_char != target) ? rnd_char :
+                      (rnd_idx == 25) ? 8'h61 : rnd_char + 1;  // no repetir
+\end{lstlisting}
+Las letras son consecutivas en ASCII, así que basta sumar el índice a \cod{'a'}.
+\textbf{No es uniforme}: los valores 26--31 se doblan a 0--5, así que \cod{a}--\cod{f}
+tienen probabilidad 2/32 y las demás 1/32. Para práctica es aceptable; una solución
+sería descartar y volver a muestrear, o usar más bits y módulo.
+\end{resp}
+
+\preg{M}{¿Por qué \texttt{0 = sin límite} en \texttt{L}?}
+\begin{resp}
+\begin{lstlisting}
+last_try <= (rounds_cfg != 0) && (total_new >= rounds_cfg);
+\end{lstlisting}
+Una sesión de 0 letras no tiene sentido, así que ese valor se reutiliza como caso
+especial sin necesitar otro comando. Con 0, \cod{rounds\_cfg != 0} es falso, nunca
+hay último intento ni \cod{F}. Sin esa condición, \cod{total\_new >= 0} sería verdadero
+desde el primer intento.
+\end{resp}
+
+\preg{A}{¿Cómo se interpreta el número en \texttt{L10}? ¿Por qué \texttt{digit\_val = buf\_rdata[3:0]}?}
+\begin{resp}
+En ST\_CMD se valida que haya 1 o 2 caracteres y que el primero sea dígito
+(\cod{'0'} $\le$ c $\le$ \cod{'9'}). Con uno solo, \cod{rounds\_cfg = dígito}. Con dos,
+guarda el primero en \cod{dig0}, pasa a ST\_LDIG2 (el buffer tiene lectura
+combinacional, pero la dirección cambia a la casilla 1) y calcula
+\cod{dig0*10 + dígito}. Responde con el valor en hex (\cod{L10} $\to$ \cod{L0A}).\par
+Los dígitos ASCII son \cod{0x30}--\cod{0x39}: el nibble bajo es exactamente el valor
+del dígito, así que \cod{buf\_rdata[3:0]} lo extrae sin restar.
+\end{resp}
+
+\preg{M}{¿Cómo funciona la pista (SW2)?}
+\begin{resp}
+\begin{lstlisting}
+if (fb_wait)                      cell_pattern <= lut_pattern;  // respuesta 2 s
+else if (target_valid && sw_hint) cell_pattern <= lut_pattern;  // pista
+else                              cell_pattern <= 6'b000000;
+\end{lstlisting}
+Se evalúa en cada ciclo en modo práctica, así que mover SW2 aplica de inmediato. La
+pista no afecta la evaluación: el acierto se cuenta igual.
+\end{resp}
+
+\preg{M}{¿Cómo funciona el temporizador de 2 segundos?}
+\begin{resp}
+Tras un intento, \cod{fb\_wait = 1} y \cod{fb\_cnt} cuenta hasta
+\cod{FEEDBACK\_DELAY - 1} = 99\,999\,999 (2 s a 50 MHz; 27 bits, $2^{27}\approx 134$
+millones). Al llegar, baja \cod{fb\_wait} y levanta \cod{need\_final} (si era el
+último intento) o \cod{need\_target} (siguiente letra). Corre fuera del \cod{case}, en
+paralelo con la FSM.
+\end{resp}
+
+\preg{A}{¿Qué pasa si se presiona NEXT en cada momento de práctica?}
+\begin{resp}
+Esperando respuesta: salta la letra sin contarla (\cod{target\_valid = 0},
+\cod{need\_target = 1}). Durante los 2 s de retroalimentación: se ignora. Con la
+sesión terminada (\cod{sess\_done}): empieza una sesión nueva (borra el marcador,
+envía \cod{MP} y pide letra).
+\end{resp}
+
+\preg{A}{¿Cuál es el rango de \texttt{hits} y \texttt{misses} y qué pasa al desbordar?}
+\begin{resp}
+8 bits: 0 a 255. Al pasar de 255 vuelven a 0 (aritmética módulo 256) sin aviso. Con
+sesiones de hasta 99 letras no ocurre, pero con \cod{L0} (sin límite) es posible
+tras 256 intentos. Mejora: saturar en 255 o ampliar a 16 bits (4 dígitos hex).
+\end{resp}
+
+% =====================================================================
+\section{Integración: \texttt{braille\_top}}
+
+\preg{B}{¿Qué hace \texttt{braille\_top}? ¿Tiene lógica propia?}
+\begin{resp}
+Nombra los pines físicos, fija todos los parámetros e instancia y conecta los
+módulos. Su única lógica propia es \cod{rst = \textasciitilde KEY[0]}, el sincronizador
+de dos flip-flops de los switches y los \cod{assign} de LEDs y puntos decimales.
+\end{resp}
+
+\preg{M}{¿Por qué los switches se sincronizan pero no tienen antirrebote?}
+\begin{resp}
+Se sincronizan porque son asíncronos (riesgo de metaestabilidad). No se les quita
+el rebote porque se mueven raramente y un rebote solo provocaría, como mucho,
+cambios de modo muy breves: el controller enviaría algún \cod{M} extra y terminaría
+en el modo correcto. Es una simplificación consciente; un antirrebote los haría más
+robustos.
+\end{resp}
+
+\preg{M}{¿Qué muestran los LEDs y displays y para qué sirven?}
+\begin{resp}
+\cod{LEDR[5:0]}: el patrón de la celda; en escritura, los botones presionados en vivo
+o el último acorde. \cod{LEDR[7:6]} y HEX5: modo. \cod{LEDR[8]}: NEXT presionado.
+\cod{LEDR[9]}: transmitiendo (\cod{msg\_busy}). HEX3--HEX2: aciertos; HEX1--HEX0:
+errores; HEX4 apagado. Sirven para depurar sin MATLAB: si un LED se enciende pero su
+servo no se mueve, el problema es mecánico o de cableado, no lógico.
+\end{resp}
+
+\preg{M}{¿Cómo se agrupan los botones en \texttt{\{KEY[1], DOT\_N\}}?}
+\begin{resp}
+La concatenación forma un vector de 7 bits: bit 6 = NEXT, bits 5..0 = puntos 6..1.
+\cod{btn\_pressed[5:0]} va a \cod{chord\_capture} y \cod{btn\_pulse[6]} al controller.
+Un solo \cod{button\_conditioner} parametrizado (\cod{N\_BUTTONS = 7}) atiende a todos.
+\end{resp}
+
+% =====================================================================
+\section{La interfaz MATLAB}
+
+\preg{B}{¿Qué hace MATLAB y qué envía?}
+\begin{resp}
+Abre el puerto serial, escucha, muestra en pantalla, habla y grafica. Envía solo
+tres cosas: \cod{Q} al conectar, \cod{R} + palabra en lectura y \cod{L} + número en
+práctica.
+\end{resp}
+
+\preg{M}{¿Cómo detecta MATLAB el fin de un mensaje y cómo maneja mensajes juntos o partidos?}
+\begin{resp}
+\cod{configureTerminator(s,"LF")} y \cod{configureCallback(s,"terminator",@alRecibir)}
+ejecutan \cod{alRecibir} al llegar un \cod{\textbackslash n}. Esa función acumula los
+bytes en \cod{rxbuf} y, en un \cod{while}, corta un mensaje por cada byte 10. Los
+mensajes completos se procesan; un pedazo incompleto se queda en el buffer hasta que
+llegue su terminador. Es el equivalente de \cod{line\_rx} en la PC.
+\end{resp}
+
+\preg{M}{¿Por qué MATLAB envía \texttt{Q} al conectarse?}
+\begin{resp}
+Porque el modo se elige con los switches y MATLAB no puede verlos. Al conectarse no
+sabe en qué modo está la tarjeta; \cod{Q} pide a la FPGA que responda \cod{M} + modo.
+\end{resp}
+
+\preg{M}{¿Dónde se calcula la precisión y por qué ahí?}
+\begin{resp}
+En MATLAB: \cod{acc = 100*h/max(1,h+e)}. La FPGA cuenta (es quien sabe si acertaste)
+y envía los totales; dividir con decimales en hardware sería costoso y solo sirve
+para mostrar. \cod{max(1,\ldots)} evita dividir entre cero.
+\end{resp}
+
+\preg{A}{¿Por qué MATLAB no lleva su propia cuenta de aciertos?}
+\begin{resp}
+Para no desincronizarse: si se perdiera un mensaje, o MATLAB se conectara a mitad de
+una sesión, una cuenta propia sería incorrecta. Leer siempre los totales de la FPGA
+garantiza que la pantalla coincide con los displays.
+\end{resp}
+
+\preg{M}{¿Cómo funciona la voz?}
+\begin{resp}
+Con el sintetizador de Windows a través de .NET: \cod{NET.addAssembly('System.Speech')}
+y \cod{SpeechSynthesizer}. \cod{SpeakAsync} habla en segundo plano para no congelar la
+ventana; \cod{SpeakAsyncCancelAll} calla la frase anterior para que no se acumulen.
+Todo está en \cod{try/catch}: sin Windows, el programa funciona sin voz.
+\end{resp}
+
+\preg{M}{¿Cómo cambia de panel la ventana?}
+\begin{resp}
+Los cuatro paneles están en la misma celda de la cuadrícula; \cod{mostrarModo} deja
+visible solo el del modo actual con \cod{pX.Visible = (m == 'X')}.
+\end{resp}
+
+\preg{A}{¿Por qué las funciones de MATLAB comparten variables sin recibirlas como argumento?}
+\begin{resp}
+Son funciones anidadas dentro de \cod{braille\_gui}; en MATLAB comparten el espacio de
+trabajo de la función que las contiene. Por eso \cod{s}, \cod{rxbuf} o \cod{histAcc}
+se ven desde todos los callbacks.
+\end{resp}
+
+\preg{M}{¿Qué protección hay si la palabra tiene más de 16 caracteres?}
+\begin{resp}
+Doble: MATLAB la rechaza antes de enviar (\cod{numel(w) > MAX\_LEN} $\to$
+\cod{uialert}); si llegara desde otro programa, \cod{line\_rx} marca overflow y el
+controller responde \cod{!L}.
+\end{resp}
+
+% =====================================================================
+\section{Análisis crítico, límites y mejoras}
+
+\preg{A}{¿Cuáles son las principales limitaciones del diseño?}
+\begin{resp}
+\begin{itemize}
+  \item Sin FIFO en recepción: depende de que la PC espere cada respuesta.
+  \item Sin paridad ni detección de errores más allá del STOP; los errores de trama
+        se descartan sin avisar.
+  \item Contadores de 8 bits que dan la vuelta en 256.
+  \item Distribución del LFSR sesgada (a--f con el doble de probabilidad).
+  \item Reset asíncrono sin sincronizar su liberación; switches sin antirrebote.
+  \item Sin signo de mayúscula ni números en Braille (solo grado 1 básico).
+  \item Voz dependiente de Windows.
+\end{itemize}
+\end{resp}
+
+\preg{A}{Si tuvieras que mejorar el proyecto, ¿qué harías primero y por qué?}
+\begin{resp}
+(1) Un sincronizador de reset y antirrebote para switches: robustez con muy poco
+costo. (2) Una FIFO pequeña en recepción para tolerar comandos seguidos. (3)
+Saturación o 16 bits en contadores. (4) Muestreo sin sesgo en el LFSR. (5) Soporte de
+números y mayúsculas en Braille. (6) Un testbench automatizado por módulo.
+\end{resp}
+
+\preg{A}{¿Cómo verificaste el diseño? ¿Cómo lo verificarías con más rigor?}
+\begin{resp}
+Pruebas en hardware con los LEDs y displays como observadores, y comandos de prueba
+(\cod{S}, \cod{C}, \cod{N}) desde un monitor serial. Con más rigor: testbenches en
+simulación (ModelSim/Questa) por módulo, reduciendo parámetros (por ejemplo
+\cod{CLKS\_PER\_BIT = 4}, \cod{DEBOUNCE\_COUNT = 8}) para simular rápido; un modelo de
+UART en el testbench que envíe tramas y compruebe las respuestas; casos límite
+(17 caracteres, \cod{L100}, comandos en minúscula, STOP erróneo) y SignalTap en la
+tarjeta.
+\end{resp}
+
+\preg{A}{¿Qué pasaría si cambias la velocidad a 115200 baudios? ¿Qué tendrías que modificar?}
+\begin{resp}
+\cod{CLKS\_PER\_BIT} = $50\,000\,000/115\,200 = 434.03 \to 434$ (error 0.007\%), en el
+top, y \cod{BAUD} en MATLAB. Nada más: el resto del diseño no depende del tiempo de
+bit. El contador de 13 bits sobra. Un byte tardaría 87\,µs.
+\end{resp}
+
+\preg{A}{¿Qué pasa si se presionan botones durante la transmisión de un mensaje?}
+\begin{resp}
+No se pierden: \cod{chord\_valid} y \cod{next\_pulse} se guardan como pendientes fuera
+del \cod{case}, y se atienden cuando la FSM vuelve a ST\_IDLE. La transmisión no se
+interrumpe porque \cod{msg\_tx} tiene su copia del mensaje.
+\end{resp}
+
+\preg{A}{¿Qué pasa si se cambia de modo a mitad de una palabra o de una sesión?}
+\begin{resp}
+El cambio de switches tiene prioridad 2: se limpia la palabra (\cod{word\_len = 0}),
+la celda, las banderas de práctica y los pendientes, y se envía el nuevo modo. Al
+volver a práctica empieza una sesión nueva con el marcador en cero.
+\end{resp}
+
+\preg{A}{¿Hay algún riesgo si llegan dos acordes muy seguidos?}
+\begin{resp}
+\cod{chord\_capture} necesita que se suelten todos los botones entre acordes y el
+antirrebote impone 10 ms por transición, así que dos acordes están separados por
+decenas de milisegundos, mientras que el controller atiende un acorde en pocos
+ciclos más el envío. Si llegara un segundo acorde con \cod{chord\_pend} todavía en
+1, sobrescribiría \cod{chord\_reg} y solo se procesaría el último: hay una sola
+posición de pendiente, no una cola. En la práctica, con tiempos humanos, no ocurre.
+\end{resp}
+
+\preg{A}{¿Por qué usar una FSM en el controller y no solo lógica combinacional?}
+\begin{resp}
+Porque las acciones son secuenciales y dependen de lo que pasó antes: leer el
+buffer, convertir, esperar a que el transmisor esté libre, enviar, volver a esperar.
+Una FSM hace explícitos esos pasos, asegura que solo se atienda un evento a la vez y
+que cada mensaje se complete antes del siguiente.
+\end{resp}
+
+\preg{A}{Justifica el uso de 9600 baudios.}
+\begin{resp}
+Es una velocidad estándar que aceptan MATLAB, el FT232RL y el HC-05 sin
+configuración. El tráfico es mínimo (mensajes de 2 a 18 bytes al ritmo de una
+persona): a 960 bytes/s el mensaje más largo tarda 18.8 ms. Velocidades menores dan
+más margen frente a errores de reloj y ruido en cables.
+\end{resp}
+
+% =====================================================================
+\section{Ejercicios de traza (respuesta paso a paso)}
+
+\preg{A}{En práctica llevas 2 aciertos y 1 error. La letra es \texttt{m} y tecleas los puntos 1-3-4. Traza todo.}
+\begin{resp}
+\begin{enumerate}
+  \item \cod{button\_conditioner}: tras 10 ms estables, \cod{btn\_pressed} muestra los
+        puntos 1, 3 y 4.
+  \item \cod{chord\_capture}: acumula \cod{001101}; al soltar todos, \cod{chord = 001101}
+        y pulso \cod{chord\_valid}.
+  \item Controller: \cod{chord\_pend = 1}, \cod{chord\_reg = 001101}. En ST\_IDLE (prioridad
+        5), modo práctica y \cod{target\_valid = 1}.
+  \item \cod{lut\_pattern} = \cod{ascii\_to\_braille('m')} = \cod{001101}; \cod{is\_hit = 1}.
+  \item \cod{hits = 3}, \cod{target\_valid = 0}, \cod{fb\_wait = 1},
+        \cod{msg\_data = "Om0301"}, \cod{msg\_len = 6}, ST\_SEND.
+  \item ST\_SEND$\to$\cod{msg\_start}$\to$ST\_GAP$\to$ST\_IDLE. \cod{msg\_tx} envía 7 bytes
+        (\cod{O m 0 3 0 1 \textbackslash n}, 7.3 ms).
+  \item HEX3--HEX2 = \cod{03}; la celda muestra la \cod{m} durante 2 s.
+  \item MATLAB: \cod{h=3}, \cod{e=1}, precisión 75\%, letra en verde, ``Correcto''.
+  \item A los 2 s: \cod{need\_target = 1} $\to$ nueva letra $\to$ \cod{T} + letra.
+\end{enumerate}
+\end{resp}
+
+\preg{A}{En modo escritura envías por error \texttt{Rhola} desde MATLAB. ¿Qué responde y por qué?}
+\begin{resp}
+\cod{line\_rx} guarda la palabra en el buffer (el comando es \cod{R}) y levanta
+\cod{line\_ready}. El controller da \cod{ack} y en ST\_CMD ve \cod{mode != MODE\_READ}:
+responde \cod{!M}. La palabra queda en el buffer pero no se usa (\cod{word\_len} no
+cambia). MATLAB muestra ``Pon la tarjeta en modo lectura''.
+\end{resp}
+
+\preg{A}{Envías \texttt{R} seguido de 17 letras. ¿Qué pasa en cada módulo?}
+\begin{resp}
+\cod{line\_rx}: guarda las primeras 16 en las casillas 0--15 (\cod{len} llega a 16);
+la 17.ª activa \cod{overflow}; el \cod{\textbackslash n} levanta \cod{line\_ready}. El
+controller, en ST\_CMD con \cod{ovf\_r = 1}: \cod{word\_len = 0}, celda vacía, responde
+\cod{!L}. (MATLAB normalmente lo impide antes de enviar.)
+\end{resp}
+
+\preg{A}{Envías \texttt{L5}, luego \texttt{L20}, luego \texttt{L100}. ¿Qué responde cada uno?}
+\begin{resp}
+\cod{L5} $\to$ \cod{L05} (\cod{rounds\_cfg = 5}). \cod{L20} $\to$ pasa por ST\_LDIG2,
+$2\cdot10+0 = 20 = $ \cod{0x14} $\to$ \cod{L14}. \cod{L100} $\to$ \cod{len = 3 > 2}
+$\to$ \cod{!U} y \cod{rounds\_cfg} no cambia.
+\end{resp}
+
+\preg{A}{Llega por el cable un byte con ruido que baja la línea solo 10 µs. ¿Qué hace \texttt{uart\_rx}?}
+\begin{resp}
+El sincronizador lo deja pasar (dura 500 ciclos) y la FSM entra a START. A los 52 µs
+(medio bit) la línea ya volvió a 1: se considera falso START y regresa a IDLE sin
+entregar nada.
+\end{resp}
+
+\preg{A}{Estás en lectura con ``hi'' cargada y presionas NEXT tres veces. ¿Qué sale por la UART?}
+\begin{resp}
+Al cargar: \cod{Dh}. 1.er NEXT: \cod{char\_idx = 1} $\to$ \cod{Di}. 2.º NEXT:
+\cod{char\_idx + 1 = 2} no es menor que \cod{word\_len = 2} $\to$ \cod{E}, celda vacía,
+\cod{word\_len = 0}. 3.er NEXT: no hay palabra (\cod{word\_len = 0}), no hace nada ni
+responde.
+\end{resp}
+
+% =====================================================================
+\section{Preguntas relámpago}
+
+\begin{longtable}{p{8.2cm} p{7cm}}
+\toprule
+\textbf{Pregunta} & \textbf{Respuesta corta} \\
+\midrule
+\endhead
+Periodo del reloj de la DE10-Lite & 20 ns (50 MHz) \\
+Ciclos por bit a 9600 & 5208 \\
+Tiempo por carácter UART & 1.04 ms (10 bits) \\
+Línea más larga que acepta la FPGA & R + 16 + \textbackslash n = 18 bytes \\
+Mensaje más largo que envía & 6 caracteres + \textbackslash n = 7 bytes \\
+Ancho de \cod{msg\_data} y por qué & 48 bits = 6 bytes, mensaje O/X \\
+Ancho de \cod{msg\_len} & 3 bits (hasta 7) \\
+Ancho de \cod{len} en \cod{line\_rx} & 5 bits (debe valer 16) \\
+Bits del contador PWM & 20 (hasta 999\,999) \\
+Bits del contador de antirrebote & 19 (hasta 500\,000) \\
+Bits del temporizador de 2 s & 27 \\
+Estados del controller & 7 (3 bits) \\
+Estados de \cod{uart\_rx} / \cod{msg\_tx} & 4 / 3 \\
+Semilla del LFSR & \cod{0xACE1} (no puede ser 0) \\
+Periodo del LFSR & 65\,535 \\
+Patrón de la \cod{h} & \cod{010011} (puntos 1, 2, 5) \\
+Patrón de la ñ & \cod{111011} (puntos 1, 2, 4, 5, 6) \\
+¿Qué hace \cod{blank} en \cod{hex7seg}? & Apaga el display (HEX4) \\
+¿Display activo en alto o en bajo? & En bajo \\
+Valor de \cod{rounds\_cfg} tras reset & 10 \\
+Respuesta a \cod{C} & \cod{S0000} \\
+Comando que no tiene respuesta propia & \cod{N} \\
+¿Quién genera el \textbackslash n de las respuestas? & \cod{msg\_tx} \\
+¿Quién guarda la palabra? & \cod{char\_buffer} \\
+¿Quién decide qué puntos suben? & \cod{braille\_controller} \\
+¿Dónde se calibran los servos? & Parámetros \cod{PULSE\_*} de \cod{braille\_top} \\
+\bottomrule
+\end{longtable}
+
+\end{document}

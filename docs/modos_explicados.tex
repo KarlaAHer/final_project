@@ -1,0 +1,867 @@
+% =====================================================================
+%  Funcionamiento de cada modo y de los servomotores
+%  Proyecto: Sistema bidireccional Texto <-> Braille en FPGA (DE10-Lite)
+%  Compilar:  pdflatex modos_explicados.tex   (dos veces)
+% =====================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noshorthands,es-tabla]{babel}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage[most]{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{tikz}
+\usetikzlibrary{automata,positioning,arrows.meta,shapes.geometric,calc,fit,decorations.pathreplacing}
+\usepackage[hidelinks]{hyperref}
+
+% ---------------- Colores ----------------
+\definecolor{tinta}{HTML}{13202B}
+\definecolor{verde}{HTML}{137366}
+\definecolor{verdesuave}{HTML}{DCEFEB}
+\definecolor{ambar}{HTML}{9A520C}
+\definecolor{ambarsuave}{HTML}{F8E6D3}
+\definecolor{azul}{HTML}{1F4E9A}
+\definecolor{azulsuave}{HTML}{E1E9F6}
+\definecolor{morado}{HTML}{5B3E99}
+\definecolor{moradosuave}{HTML}{ECE6F7}
+\definecolor{gris}{HTML}{5B6874}
+\definecolor{grissuave}{HTML}{ECEFF1}
+\definecolor{fondocodigo}{HTML}{F4F6F7}
+
+% ---------------- Formato ----------------
+\titleformat{\section}{\Large\bfseries\color{tinta}}{\thesection}{0.8em}{}[\vspace{-0.4em}\textcolor{verde}{\rule{\linewidth}{1pt}}]
+\titleformat{\subsection}{\large\bfseries\color{tinta}}{\thesubsection}{0.7em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{verde}}{\thesubsubsection}{0.6em}{}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{gris}Sistema Braille FPGA}
+\fancyhead[R]{\small\color{gris}\nouppercase{\leftmark}}
+\fancyfoot[C]{\small\thepage}
+
+\lstdefinestyle{vlog}{
+  language=Verilog, basicstyle=\ttfamily\small,
+  keywordstyle=\color{azul}\bfseries, commentstyle=\color{gris}\itshape,
+  backgroundcolor=\color{fondocodigo}, frame=single, rulecolor=\color{gris!40},
+  framesep=5pt, xleftmargin=6pt, xrightmargin=6pt,
+  breaklines=true, columns=fullflexible, keepspaces=true, showstringspaces=false,
+  literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1 {ñ}{{\~n}}1
+}
+\lstset{style=vlog}
+
+\newtcolorbox{idea}[1][Idea clave]{breakable,colback=verdesuave,colframe=verde,fonttitle=\bfseries,title=#1,arc=1.5mm,boxrule=0.6pt}
+\newtcolorbox{ojo}[1][Atención]{breakable,colback=ambarsuave,colframe=ambar,fonttitle=\bfseries,title=#1,arc=1.5mm,boxrule=0.6pt}
+\newcommand{\cod}[1]{\texttt{#1}}
+\setlength{\emergencystretch}{3em}
+\setlist{itemsep=2pt,topsep=4pt}
+\renewcommand{\arraystretch}{1.25}
+
+% ---------------- Pasos numerados ----------------
+\newtcolorbox[auto counter,number within=subsection]{paso}[1]{enhanced,breakable,colback=white,
+  colframe=#1,boxrule=0.6pt,arc=1.5mm,left=8pt,right=8pt,top=4pt,bottom=4pt,
+  title={\bfseries Paso \arabic{tcb@cnt@paso}},fonttitle=\small,coltitle=white,colbacktitle=#1}
+
+% ---------------- Estilos TikZ ----------------
+\tikzset{
+  >=Stealth,
+  modo/.style={rectangle,rounded corners=8pt,draw=#1,very thick,fill=#1!12,minimum width=3.2cm,minimum height=1.5cm,font=\small\bfseries,align=center},
+  st/.style={rectangle,rounded corners=5pt,draw=#1,very thick,fill=#1!10,minimum width=2.8cm,minimum height=1.05cm,font=\scriptsize\bfseries,align=center},
+  bx/.style={rectangle,rounded corners=3pt,draw=gris,thick,fill=white,minimum height=0.85cm,minimum width=2.2cm,font=\scriptsize\ttfamily,align=center},
+  lab/.style={font=\scriptsize,align=center},
+  msg/.style={font=\scriptsize\ttfamily,fill=white,inner sep=1.5pt}
+}
+
+% =====================================================================
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{3cm}
+{\color{verde}\large\bfseries PROYECTO FINAL \textendash{} DE10-LITE\par}
+\vspace{0.7cm}
+{\color{tinta}\Huge\bfseries Cómo funciona cada modo\par}
+\vspace{0.3cm}
+{\color{tinta}\LARGE y los servomotores\par}
+\vspace{0.7cm}
+{\large\color{gris}Diagramas de estados y flujo paso a paso, de la UART a los servos\par}
+\vspace{1.6cm}
+\begin{minipage}{0.8\textwidth}
+\begin{idea}[Contenido]
+\begin{enumerate}[leftmargin=*]
+  \item Los cuatro modos y cómo se cambia entre ellos (diagrama de estados).
+  \item Las piezas que participan en todos los modos.
+  \item Flujo paso a paso de \textbf{Lectura}, \textbf{Escritura} y \textbf{Práctica},
+        desde la UART o los botones hasta los servos y MATLAB.
+  \item Cómo funcionan los servomotores: PWM, calibración y qué patrón muestra cada modo.
+\end{enumerate}
+\end{idea}
+\end{minipage}
+\vfill
+{\color{gris}Archivos: \cod{braille\_controller.v}, \cod{braille\_top.v}, \cod{uart\_rx.v}, \cod{line\_rx.v},
+\cod{char\_buffer.sv}, \cod{msg\_tx.v}, \cod{uart\_tx.v}, \cod{button\_conditioner.v}, \cod{chord\_capture.v},
+\cod{servo\_controller.v}, \cod{ascii\_to\_braille.v}, \cod{braille\_to\_ascii.v}\par}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{Los cuatro modos}
+
+\subsection{Diagrama de estados de los modos}
+
+El modo se elige \textbf{solo con los switches SW1 y SW0} de la tarjeta. Desde
+cualquier modo se puede pasar a cualquier otro moviendo los switches. Cada vez que
+cambia, la FPGA ejecuta las acciones de entrada del nuevo modo y avisa a MATLAB.
+
+\begin{center}
+\begin{tikzpicture}[->,thick]
+\node[modo=gris]  (I) at (0,0)    {REPOSO\\[2pt]\normalfont\scriptsize SW = 00 \quad mode = 0};
+\node[modo=verde] (R) at (7.5,0)  {LECTURA\\[2pt]\normalfont\scriptsize SW = 01 \quad mode = 1};
+\node[modo=ambar] (W) at (0,-5)   {ESCRITURA\\[2pt]\normalfont\scriptsize SW = 10 \quad mode = 2};
+\node[modo=morado](P) at (7.5,-5) {PRÁCTICA\\[2pt]\normalfont\scriptsize SW = 11 \quad mode = 3};
+\draw[<->] (I) -- node[lab,above]{SW $\to$ 01 / 00} (R);
+\draw[<->] (I) -- node[lab,left]{SW $\to$ 10 / 00} (W);
+\draw[<->] (R) -- node[lab,right]{SW $\to$ 11 / 01} (P);
+\draw[<->] (W) -- node[lab,below]{SW $\to$ 11 / 10} (P);
+\draw[<->] (I) -- node[lab,sloped,above,pos=0.22]{SW $\to$ 11 / 00} (P);
+\draw[<->] (R) -- node[lab,sloped,above,pos=0.78]{SW $\to$ 10 / 01} (W);
+\draw[<-] (I.north) -- ++(0,0.8) node[above,lab]{reset (KEY0)};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Qué pasa en cada transición}
+
+El controller compara en cada vuelta por \cod{ST\_IDLE} el modo de los switches
+(\cod{sw\_mode}) con el último que conoció (\cod{sw\_last}). Si son distintos:
+
+\begin{lstlisting}
+sw_last      <= sw_mode;        // recuerda el nuevo modo
+mode         <= sw_mode;        // lo activa
+cell_pattern <= 6'b000000;      // celda vacia (servos abajo)
+word_len     <= 0;              // olvida la palabra de lectura
+target_valid <= 0;  fb_wait <= 0;  last_try <= 0;   // limpia practica
+need_final <= 0;  sess_done <= 0;
+chord_pend <= 0;  next_pend <= 0;                     // descarta pendientes
+if (sw_mode == MODE_PRACT) begin
+    hits <= 0;  misses <= 0;    // sesion nueva
+    need_target <= 1;           // pedir la primera letra
+end
+msg_data <= {..., mode_char(sw_mode), "M"};   // avisa a MATLAB: MI, MR, MW o MP
+\end{lstlisting}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{l c >{\raggedright}X >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Modo} & \textbf{Envía} & \textbf{Acciones de entrada} & \textbf{MATLAB} \\
+\midrule
+Reposo & \cod{MI} & Celda vacía, todo limpio & Panel de instrucciones \\
+Lectura & \cod{MR} & Celda vacía, sin palabra cargada & Panel de lectura \\
+Escritura & \cod{MW} & Celda vacía & Panel de escritura \\
+Práctica & \cod{MP} & Marcador en cero, pide la primera letra & Panel de práctica, reinicia gráfica y envía \cod{L} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\begin{idea}[Por qué los switches y no MATLAB]
+Así la tarjeta funciona sola, sin PC. MATLAB nunca elige el modo: lo descubre con el
+mensaje \cod{M} (que la FPGA envía al cambiar los switches, o como respuesta a \cod{Q}).
+\end{idea}
+
+\subsection{La máquina de estados del controller (común a todos los modos)}
+
+Los modos no son estados de la FSM: son un registro (\cod{mode}) que cambia lo que
+hace cada estado. La FSM del controller es la misma en los cuatro modos:
+
+\begin{center}
+\resizebox{\linewidth}{!}{\begin{tikzpicture}[->,thick]
+\node[st=azul] (I) at (0,0) {ST\_IDLE\\\normalfont atiende eventos};
+\node[st=azul] (C) at (4.2,2.2) {ST\_CMD\\\normalfont ejecuta comando};
+\node[st=azul] (L) at (8.8,2.2) {ST\_LDIG2\\\normalfont 2.º dígito de L};
+\node[st=azul] (S) at (4.2,0) {ST\_SHOW\\\normalfont letra a la celda};
+\node[st=azul] (T) at (4.2,-2.2) {ST\_TARGET\\\normalfont anuncia letra};
+\node[st=azul] (N) at (12.2,0) {ST\_SEND\\\normalfont espera TX libre};
+\node[st=azul] (G) at (12.2,-2.5) {ST\_GAP\\\normalfont 1 ciclo};
+\draw (I) -- node[lab,above left]{línea PC} (C);
+\draw (I) -- node[lab,above]{NEXT} (S);
+\draw (I) -- node[lab,below left]{letra nueva} (T);
+\draw (C) -- node[lab,above]{L de 2 díg.} (L);
+\draw (C) -- node[lab,left]{R válido} (S);
+\draw (C.south east) to[out=-15,in=165] node[lab,above,pos=0.55]{otros} (N.north west);
+\draw (L) -- (N);
+\draw (S) -- (N);
+\draw (T.east) to[out=0,in=-150] (N.south west);
+\draw (N) edge[loop right] node[lab]{ocupado} (N);
+\draw (N) -- node[lab,right]{msg\_start} (G);
+\draw (G.south) -- ++(0,-0.7) -| (I.south);
+\draw (I.north) -- ++(0,3.4) -| node[lab,above,pos=0.25]{cambio de modo, acorde, NEXT, fin de sesión} (N.north);
+\end{tikzpicture}}
+\end{center}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{c >{\raggedright}p{4.2cm} >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Prioridad} & \textbf{Evento en ST\_IDLE} & \textbf{Qué hace} \\
+\midrule
+1 & Línea de la PC & \cod{ack}, copia el comando y va a ST\_CMD \\
+2 & Cambio de switches & Acciones de entrada del modo y envía \cod{M} \\
+3 & Fin de sesión & Envía \cod{F} (solo práctica) \\
+4 & Falta letra nueva & LFSR $\to$ ST\_TARGET (solo práctica) \\
+5 & Acorde tecleado & Escritura: \cod{K}; práctica: compara y \cod{O}/\cod{X} \\
+6 & NEXT & Depende del modo \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% =====================================================================
+\section{Las piezas que participan}
+
+Antes de ver cada modo, conviene ubicar los dos caminos de entrada y el camino de
+salida. Cada modo usa una combinación distinta.
+
+\begin{center}
+\resizebox{\linewidth}{!}{\begin{tikzpicture}[node distance=0.45cm and 0.75cm]
+\node[bx,minimum height=4.4cm,minimum width=1.5cm] (pc) {PC\\MATLAB};
+\node[bx,right=1.6cm of pc.north east,anchor=north west,yshift=-0.15cm,draw=verde,fill=verdesuave] (rx) {uart\_rx};
+\node[bx,right=of rx,draw=verde,fill=verdesuave] (lr) {line\_rx};
+\node[bx,below=of lr] (bf) {char\_buffer};
+\node[bx,below=0.45cm of rx] (bt) {button\_\\conditioner};
+\node[bx,below=of bf] (ch) {chord\_capture};
+\node[bx,below=3.15cm of rx,minimum width=5.2cm,xshift=1.5cm,draw=ambar,fill=ambarsuave] (tx) {msg\_tx + uart\_tx};
+\node[bx,right=1.1cm of lr.north east,anchor=north west,minimum height=4.4cm,minimum width=2.2cm,fill=tinta,text=white,draw=tinta] (ct) {braille\_\\controller\\[3pt](mode)};
+\node[bx,right=0.8cm of ct.north east,anchor=north west] (a2b) {ascii\_to\_\\braille};
+\node[bx,below=of a2b] (b2a) {braille\_to\_\\ascii};
+\node[bx,below=of b2a,draw=morado,fill=moradosuave] (sv) {servo\_\\controller};
+\draw[->,thick,verde] (pc.east|-rx) -- node[above,lab]{UART\_RX} (rx);
+\draw[->,thick,verde] (rx) -- (lr);
+\draw[->,thick] (lr) -- (bf);
+\draw[->,thick,verde] (lr.east) -- (ct.west|-lr);
+\draw[->,thick] (bf.east) -- (ct.west|-bf);
+\draw[->,thick] (bt.south) |- (ch.west);
+\draw[->,thick] (ch.east) -- (ct.west|-ch);
+\draw[<->,thick] (ct.east|-a2b) -- (a2b);
+\draw[<->,thick] (ct.east|-b2a) -- (b2a);
+\draw[->,thick,morado] (ct.east|-sv) -- (sv);
+\draw[->,thick,ambar] (ct.west|-tx) -- (tx.east);
+\draw[->,thick,ambar] (tx.west) -- node[above,lab]{UART\_TX} (pc.east|-tx);
+\end{tikzpicture}}
+\end{center}
+
+\begin{center}
+\noindent\small (NEXT sale de \cod{button\_conditioner} como \cod{press\_pulse[6]} y llega directo al controller.)\normalsize\par\medskip
+\begin{tabularx}{\linewidth}{>{\raggedright}p{3.4cm} c c c >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Pieza} & \textbf{Lectura} & \textbf{Escritura} & \textbf{Práctica} & \textbf{Para qué} \\
+\midrule
+UART de entrada & \checkmark & & (\cod{L}) & Recibir la palabra o la configuración \\
+\cod{char\_buffer} & \checkmark & & (\cod{L}) & Guardar la palabra \\
+Botones Braille & & \checkmark & \checkmark & Teclear letras \\
+Botón NEXT & \checkmark & \checkmark & \checkmark & Avanzar, espacio o saltar \\
+\cod{ascii\_to\_braille} & \checkmark & & \checkmark & Letra $\to$ puntos \\
+\cod{braille\_to\_ascii} & & \checkmark & \checkmark & Acorde $\to$ letra \\
+LFSR & & & \checkmark & Letra al azar \\
+Servos & \checkmark & & \checkmark & Mostrar la letra \\
+UART de salida & \checkmark & \checkmark & \checkmark & Avisar a MATLAB \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% =====================================================================
+\section{Modo Reposo (SW = 00)}
+
+Es el modo de arranque (después del reset, \cod{mode = 0}). No hace nada: la celda
+queda vacía, los acordes y NEXT se ignoran, y MATLAB muestra las instrucciones de los
+switches. Solo responde a los comandos de la PC (por ejemplo \cod{Q} $\to$ \cod{MI};
+\cod{R} $\to$ \cod{!M}).
+
+% =====================================================================
+\section{Modo Lectura (SW = 01): de la PC a los servos}
+
+\subsection{Idea general}
+MATLAB envía una palabra; la FPGA la guarda y la muestra en la celda \textbf{una
+letra a la vez}. Cada vez que el usuario presiona NEXT, avanza a la siguiente letra.
+
+\subsection{Diagrama de estados del modo}
+\begin{center}
+\begin{tikzpicture}[->,thick]
+\node[st=verde] (A) at (0,0) {SIN PALABRA\\\normalfont word\_len = 0\\celda vacía};
+\node[st=verde] (B) at (7,0) {MOSTRANDO LETRA i\\\normalfont char\_idx = i\\celda = letra i};
+\draw[<-] (A.west) -- ++(-1,0) node[left,lab]{entrar\\a lectura};
+\draw (A) -- node[lab,above]{R válido}node[lab,below]{i = 0, envía D} (B);
+\draw (B) edge[loop above] node[lab]{NEXT y quedan letras: i + 1, envía D\\R válido: nueva palabra, i = 0} (B);
+\draw (B) to[bend left=40] node[lab,below]{NEXT en la última letra: envía E, celda vacía} (A);
+\draw (A) edge[loop above] node[lab]{NEXT: no hace nada\\R inválido: !L o !U} (A);
+\end{tikzpicture}
+\end{center}
+
+\subsection{Flujo paso a paso: MATLAB envía ``hola''}
+
+\begin{paso}{verde}
+\textbf{MATLAB envía el comando.} El usuario escribe ``hola'' y presiona
+\emph{Enviar palabra}. \cod{enviarPalabra} revisa que no tenga más de 16 caracteres
+y llama a \cod{enviar("Rhola")}, que manda 6 bytes:
+\cod{R}(82) \cod{h}(104) \cod{o}(111) \cod{l}(108) \cod{a}(97) \cod{\textbackslash n}(10).
+Por el cable tardan $6 \times 1.04 = 6.25$ ms.
+\end{paso}
+
+\begin{paso}{verde}
+\textbf{\cod{uart\_rx} convierte bits en bytes.} Para cada byte detecta la
+bajada a 0 (START), espera medio bit para leer al centro, lee 8 bits (uno cada 5208
+ciclos), revisa el STOP y entrega el byte en \cod{data\_out} con un pulso
+\cod{data\_ready}. Esto ocurre 6 veces.
+\end{paso}
+
+\begin{paso}{verde}
+\textbf{\cod{line\_rx} arma la línea.}
+\begin{itemize}[leftmargin=*]
+  \item \cod{R}: es el primer byte, así que \cod{cmd = 'R'}, \cod{len = 0}.
+  \item \cod{h}, \cod{o}, \cod{l}, \cod{a}: son datos de un comando \cod{R}, así que
+        \cod{buf\_we = 1} y se escriben en \cod{char\_buffer} en las casillas 0, 1, 2 y 3
+        (\cod{buf\_waddr = len}). \cod{len} termina en 4.
+  \item \cod{\textbackslash n}: fin de línea, \cod{line\_ready = 1}.
+\end{itemize}
+\begin{center}
+\resizebox{0.95\linewidth}{!}{\begin{tikzpicture}[scale=0.9]
+\foreach \i/\c in {0/h,1/o,2/l,3/a}{\draw[thick,fill=verdesuave] (\i*1.1,0) rectangle ++(1,0.8); \node[font=\ttfamily] at (\i*1.1+0.5,0.4) {\c}; \node[lab] at (\i*1.1+0.5,-0.3) {\i};}
+\foreach \i in {4,...,15}{\draw[thick,fill=white] (\i*1.1,0) rectangle ++(1,0.8); \node[lab] at (\i*1.1+0.5,-0.3) {\i};}
+\node[lab,anchor=east] at (-0.2,0.4) {char\_buffer};
+\end{tikzpicture}}
+\end{center}
+\end{paso}
+
+\begin{paso}{azul}
+\textbf{El controller toma la línea (ST\_IDLE $\to$ ST\_CMD).} Ve
+\cod{line\_ready}, responde \cod{line\_ack} (libera a \cod{line\_rx}), copia
+\cod{cmd\_r = 'R'}, \cod{len\_r = 4}, \cod{ovf\_r = 0} y pone \cod{char\_idx = 0}.
+En ST\_CMD valida:
+\begin{itemize}[leftmargin=*]
+  \item ¿Está en modo lectura? Si no $\to$ responde \cod{!M}.
+  \item ¿Hubo overflow (más de 16)? Si sí $\to$ \cod{!L} y borra la palabra.
+  \item ¿Largo 0? Si sí $\to$ \cod{!U}.
+  \item Todo bien: \cod{word\_len = 4} y pasa a ST\_SHOW.
+\end{itemize}
+\end{paso}
+
+\begin{paso}{azul}
+\textbf{ST\_SHOW: la letra va a la celda.} El buffer se lee con
+\cod{buf\_raddr = char\_idx = 0} y devuelve \cod{'h'} en el mismo ciclo (lectura
+combinacional). En lectura, \cod{lut\_in = buf\_rdata}, así que
+\cod{ascii\_to\_braille('h') = 010011}.
+\begin{lstlisting}
+cell_pattern <= lut_valid ? lut_pattern : 6'b000000;  // 010011 -> servos
+msg_data     <= {32'd0, buf_rdata, "D"};             // mensaje "Dh"
+msg_len      <= 2;
+\end{lstlisting}
+\end{paso}
+
+\begin{paso}{morado}
+\textbf{Los servos se mueven.} \cod{servo\_controller} copia el patrón
+\cod{010011} al iniciar el siguiente periodo de 20 ms y suben los puntos 1, 2 y 5
+(sección~\ref{sec:servos}).
+\end{paso}
+
+\begin{paso}{ambar}
+\textbf{La respuesta sale (ST\_SEND $\to$ ST\_GAP $\to$ ST\_IDLE).}
+Cuando \cod{msg\_busy = 0}, el controller da \cod{msg\_start}. \cod{msg\_tx} copia
+el mensaje y envía \cod{D}, \cod{h} y \cod{\textbackslash n} a través de
+\cod{uart\_tx} (3 bytes, 3.1 ms).
+\end{paso}
+
+\begin{paso}{ambar}
+\textbf{MATLAB lo muestra.} \cod{alRecibir} junta los bytes hasta el
+\cod{\textbackslash n} y \cod{procesar} entra al caso \cod{'D'}: muestra una
+\textbf{H} gigante y la dice en voz alta.
+\end{paso}
+
+\begin{paso}{gris}
+\textbf{El usuario presiona NEXT.} \cod{button\_conditioner} quita el
+rebote (10 ms) y genera \cod{press\_pulse[6]}. El controller marca
+\cod{next\_pend = 1} y, en ST\_IDLE, como \cod{char\_idx + 1 = 1 < word\_len = 4},
+hace \cod{char\_idx = 1} y vuelve a ST\_SHOW $\to$ celda con la \cod{o} y mensaje
+\cod{Do}. Se repite con \cod{l} y \cod{a}.
+\end{paso}
+
+\begin{paso}{gris}
+\textbf{NEXT después de la última letra.} Ahora
+\cod{char\_idx + 1 = 4} no es menor que \cod{word\_len}: el controller pone
+\cod{word\_len = 0}, la celda vacía y envía \cod{E}. MATLAB muestra ``Fin de la
+palabra''. Un NEXT más ya no hace nada.
+\end{paso}
+
+\subsection{Diagrama de secuencia}
+\begin{center}
+\begin{tikzpicture}[yscale=0.58]
+\node[bx] (u) at (0,0) {Usuario};
+\node[bx,draw=ambar,fill=ambarsuave] (m) at (4,0) {MATLAB};
+\node[bx,fill=tinta,text=white,draw=tinta] (f) at (9,0) {FPGA};
+\node[bx,draw=morado,fill=moradosuave] (s) at (13.2,0) {Servos};
+\foreach \x in {0,4,9,13.2}{\draw[gris,dashed] (\x,-0.6) -- (\x,-13.4);}
+\draw[->,thick] (0,-1.3) -- node[msg,above]{escribe ``hola''} (4,-1.3);
+\draw[->,thick,verde] (4,-2.3) -- node[msg,above]{Rhola\textbackslash n} (9,-2.3);
+\draw[->,thick,morado] (9,-3.3) -- node[msg,above]{010011 (h)} (13.2,-3.3);
+\draw[->,thick,ambar] (9,-4.3) -- node[msg,above]{Dh\textbackslash n} (4,-4.3);
+\draw[->,thick] (4,-5.2) -- node[msg,above]{muestra H, voz} (0,-5.2);
+\draw[->,thick] (0,-6.4) -- node[msg,above]{NEXT (botón)} (9,-6.4);
+\draw[->,thick,morado] (9,-7.3) -- node[msg,above]{010101 (o)} (13.2,-7.3);
+\draw[->,thick,ambar] (9,-8.2) -- node[msg,above]{Do\textbackslash n} (4,-8.2);
+\node[lab] at (6.5,-9.4) {\dots\ l, a \dots};
+\draw[->,thick] (0,-10.6) -- node[msg,above]{NEXT (última)} (9,-10.6);
+\draw[->,thick,morado] (9,-11.5) -- node[msg,above]{000000} (13.2,-11.5);
+\draw[->,thick,ambar] (9,-12.5) -- node[msg,above]{E\textbackslash n} (4,-12.5);
+\end{tikzpicture}
+\end{center}
+
+\subsection{Casos especiales}
+\begin{center}
+\begin{tabularx}{\linewidth}{>{\raggedright}p{5.4cm} >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Situación} & \textbf{Resultado} \\
+\midrule
+\cod{R} en otro modo & Responde \cod{!M}; la palabra se escribe en el buffer pero no se usa \\
+Más de 16 caracteres & \cod{line\_rx} marca overflow $\to$ \cod{!L}, celda vacía \\
+\cod{R} sin palabra & \cod{!U} \\
+Carácter sin Braille (\cod{5}, \cod{á}) & Celda vacía, pero igual envía \cod{D} + carácter \\
+Mayúsculas & Mismo patrón que la minúscula \\
+Espacio & Celda vacía (válido) \\
+Nueva palabra a mitad de otra & Reemplaza a la anterior y empieza en la casilla 0 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% =====================================================================
+\section{Modo Escritura (SW = 10): de los botones a la PC}
+
+\subsection{Idea general}
+El usuario teclea una letra presionando varios botones Braille a la vez (un
+\emph{acorde}). La FPGA reconoce la letra y se la envía a MATLAB, que la muestra y la
+dice. NEXT funciona como espacio. Los servos no se usan.
+
+\subsection{Diagrama de estados del modo}
+El modo depende de cómo \cod{chord\_capture} forma cada acorde:
+\begin{center}
+\begin{tikzpicture}[->,thick]
+\node[st=ambar,initial,initial text=] (E) at (0,0) {ESPERANDO\\\normalfont acc = 000000};
+\node[st=ambar] (A) at (7.5,0) {ACUMULANDO\\\normalfont acc = acc OR botones};
+\node[st=ambar] (D) at (3.75,-3.2) {ENTREGA\\\normalfont chord = acc\\chord\_valid = 1};
+\draw (E) -- node[lab,above]{algún botón presionado} (A);
+\draw (A) edge[loop above] node[lab]{sigue habiendo botones presionados} (A);
+\draw (A) -- node[lab,right]{todos sueltos} (D);
+\draw (D) -- node[lab,left]{1 ciclo, acc = 0} (E);
+\draw (E) edge[loop above] node[lab]{NEXT: envía ``K\textvisiblespace''} (E);
+\end{tikzpicture}
+\end{center}
+\begin{center}\small (\cod{chord\_capture} no tiene una FSM con \cod{case}; estos ``estados'' son las tres situaciones de su registro \cod{acc}.)\end{center}
+
+\subsection{Flujo paso a paso: teclear la letra h}
+
+\begin{paso}{gris}
+\textbf{El usuario presiona los puntos 1, 2 y 5.} Los botones son
+activos en bajo: presionados dan 0 en \cod{DOT\_N}. Nunca se presionan en el mismo
+instante exacto.
+\end{paso}
+
+\begin{paso}{gris}
+\textbf{\cod{button\_conditioner} limpia las señales.} Para cada botón:
+dos flip-flops de sincronización, luego un contador que exige 10 ms de estabilidad
+(500\,000 ciclos) antes de aceptar el cambio. Invierte la lógica:
+\cod{buttons\_pressed[i] = 1} significa presionado.
+\end{paso}
+
+\begin{paso}{ambar}
+\textbf{\cod{chord\_capture} acumula.} Mientras haya algún botón
+presionado: \cod{acc <= acc | dots\_pressed}. Así, aunque los dedos lleguen en
+momentos distintos o se suelte uno antes, el OR conserva los tres:
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Momento} & \textbf{botones} & \textbf{acc} \\
+\midrule
+presiona 1 & \cod{000001} & \cod{000001} \\
+agrega 2 & \cod{000011} & \cod{000011} \\
+agrega 5 & \cod{010011} & \cod{010011} \\
+suelta 1 y 2 & \cod{010000} & \cod{010011} \\
+suelta 5 & \cod{000000} & entrega \cod{010011} \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{paso}
+
+\begin{paso}{ambar}
+\textbf{Entrega el acorde.} Cuando ya no queda ningún botón presionado:
+\cod{chord = 010011}, \cod{chord\_valid = 1} (pulso) y \cod{acc = 0}. Mientras tanto,
+\cod{LEDR[5:0]} muestra los botones en vivo.
+\end{paso}
+
+\begin{paso}{azul}
+\textbf{El controller lo guarda como pendiente.} Fuera de la FSM, en
+cada ciclo: \cod{if (chord\_valid) begin chord\_pend <= 1; chord\_reg <= chord; end}.
+Así no se pierde aunque el controller esté enviando otro mensaje.
+\end{paso}
+
+\begin{paso}{azul}
+\textbf{ST\_IDLE lo atiende (prioridad 5).} Con
+\cod{chord\_pend \&\& !chord\_valid} y \cod{mode = escritura}:
+\begin{lstlisting}
+last_chord <= chord_reg;                 // para los LEDs
+msg_data   <= {32'd0, typed_ascii, "K"}; // typed_ascii = braille_to_ascii(010011) = 'h'
+msg_len    <= 2;  state <= ST_SEND;
+\end{lstlisting}
+Si el patrón no corresponde a ninguna letra, \cod{braille\_to\_ascii} devuelve
+\cod{'?'} y se envía \cod{K?}.
+\end{paso}
+
+\begin{paso}{ambar}
+\textbf{Sale el mensaje.} ST\_SEND $\to$ \cod{msg\_tx} $\to$
+\cod{uart\_tx}: \cod{K}, \cod{h}, \cod{\textbackslash n}.
+\end{paso}
+
+\begin{paso}{ambar}
+\textbf{MATLAB lo muestra.} Caso \cod{'K'} $\to$ \cod{letraEscrita('h')}:
+agrega la letra al texto, la dice en voz alta y la suma a la palabra actual.
+\end{paso}
+
+\begin{paso}{gris}
+\textbf{NEXT = espacio.} El controller envía \cod{K} + espacio. MATLAB
+agrega un espacio y lee en voz alta la palabra completa que se acaba de escribir.
+\end{paso}
+
+\subsection{Diagrama de secuencia}
+\begin{center}
+\begin{tikzpicture}[yscale=0.6]
+\node[bx] (u) at (0,0) {Usuario};
+\node[bx] (b) at (3.6,0) {button\_cond.\\chord\_capture};
+\node[bx,fill=tinta,text=white,draw=tinta] (f) at (8,0) {controller};
+\node[bx,draw=ambar,fill=ambarsuave] (m) at (12.4,0) {MATLAB};
+\foreach \x in {0,3.6,8,12.4}{\draw[gris,dashed] (\x,-0.7) -- (\x,-8.6);}
+\draw[->,thick] (0,-1.4) -- node[msg,above]{puntos 1,2,5} (3.6,-1.4);
+\draw[->,thick] (3.6,-2.5) -- node[msg,above]{chord = 010011} (8,-2.5);
+\node[lab,anchor=west] at (8.1,-3.3) {braille\_to\_ascii $\to$ 'h'};
+\draw[->,thick,ambar] (8,-4.2) -- node[msg,above]{Kh\textbackslash n} (12.4,-4.2);
+\node[lab,anchor=west] at (12.5,-4.9) {muestra h, voz};
+\draw[->,thick] (0,-6.0) -- node[msg,above]{NEXT} (8,-6.0);
+\draw[->,thick,ambar] (8,-7.0) -- node[msg,above]{K\textvisiblespace\textbackslash n} (12.4,-7.0);
+\node[lab,anchor=west] at (12.5,-7.7) {lee la palabra};
+\end{tikzpicture}
+\end{center}
+
+% =====================================================================
+\section{Modo Práctica (SW = 11): la FPGA enseña}
+
+\subsection{Idea general}
+La FPGA elige una letra al azar y se la anuncia a MATLAB. El usuario la teclea en
+Braille. La FPGA compara, suma un acierto o un error, muestra la respuesta correcta
+durante 2 segundos y elige otra letra. Al completar las letras de la sesión (10 por
+defecto, configurable con \cod{L}) envía el resultado final.
+
+\subsection{Diagrama de estados del modo}
+\begin{center}
+\resizebox{\linewidth}{!}{\begin{tikzpicture}[->,thick]
+\node[st=morado] (N) at (0,0) {PEDIR LETRA\\\normalfont need\_target = 1};
+\node[st=morado] (W) at (7.5,0) {ESPERANDO\\RESPUESTA\\\normalfont target\_valid = 1};
+\node[st=morado] (F) at (7.5,-5) {RETROALIMENTACIÓN\\\normalfont fb\_wait = 1 (2 s)};
+\node[st=morado] (D) at (0,-5) {SESIÓN\\TERMINADA\\\normalfont sess\_done = 1};
+\draw[<-] (N.west) -- ++(-1,0) node[left,lab]{entrar a\\práctica};
+\draw (N) -- node[lab,above]{LFSR elige letra}node[lab,below]{envía T + letra} (W);
+\draw (W.north) to[bend right=30] node[lab,above]{NEXT: saltar (no cuenta)} (N.north);
+\draw (W) -- node[lab,right]{acorde: compara\\hits o misses + 1\\envía O o X} (F);
+\draw (F) -- node[lab,sloped,above]{2 s y quedan letras} (N);
+\draw (F) -- node[lab,below]{2 s y era la última: envía F} (D);
+\draw (D) -- node[lab,left]{NEXT: marcador = 0\\envía MP} (N);
+\draw (W) edge[loop right] node[lab]{SW2 = 1:\\pista} (W);
+\draw (F) edge[loop right] node[lab]{acordes\\ignorados} (F);
+\end{tikzpicture}}
+\end{center}
+
+\begin{ojo}[Cómo se implementan estos estados]
+No hay una variable ``estado de práctica''. Los estados de arriba se representan con
+banderas del controller: \cod{need\_target} (pedir letra), \cod{target\_valid}
+(esperando respuesta), \cod{fb\_wait} (mostrando la respuesta), \cod{need\_final}
+(mandar el resultado) y \cod{sess\_done} (sesión terminada). La FSM principal
+(ST\_IDLE, ST\_TARGET, ST\_SEND\ldots) las revisa en cada vuelta.
+\end{ojo}
+
+\subsection{Flujo paso a paso}
+
+\begin{paso}{gris}
+\textbf{Entrar al modo.} Con SW = 11, el controller pone
+\cod{hits = misses = 0}, \cod{need\_target = 1} y envía \cod{MP}. MATLAB cambia al
+panel de práctica, reinicia la gráfica y responde con \cod{L10} (letras por sesión
+del selector).
+\end{paso}
+
+\begin{paso}{verde}
+\textbf{Configurar la sesión (UART de entrada).} \cod{L10} llega por
+\cod{uart\_rx} $\to$ \cod{line\_rx} (guarda \cod{'1'} y \cod{'0'} en las casillas 0 y 1)
+$\to$ ST\_CMD: el primer carácter es dígito y hay dos, así que guarda
+\cod{dig0 = 1} y pasa a ST\_LDIG2, que lee la casilla 1 y calcula
+$1 \times 10 + 0 = 10$. \cod{rounds\_cfg = 10}. Responde \cod{L0A} (10 en hex).
+\end{paso}
+
+\begin{paso}{morado}
+\textbf{Elegir la letra (LFSR).} En ST\_IDLE, con \cod{need\_target = 1}
+(prioridad 4), toma la letra del generador:
+\begin{lstlisting}
+wire [4:0] r5       = lfsr[4:0];                     // 0..31
+wire [4:0] rnd_idx  = (r5 >= 26) ? (r5 - 26) : r5;   // 0..25
+wire [7:0] rnd_char = 8'h61 + rnd_idx;               // 'a'..'z'
+target <= new_char;                                  // si se repite, la siguiente
+\end{lstlisting}
+Por ejemplo \cod{target = 'm'}. Pasa a ST\_TARGET.
+\end{paso}
+
+\begin{paso}{morado}
+\textbf{Anunciar la letra.} ST\_TARGET: \cod{target\_valid = 1} y envía
+\cod{Tm}. MATLAB muestra ``M'', ``Letra 1 de 10'' y dice ``letra m''.\\
+En práctica, \cod{lut\_in = target}, así que \cod{lut\_pattern} ya vale
+\cod{ascii\_to\_braille('m') = 001101}: es la respuesta correcta.
+\end{paso}
+
+\begin{paso}{morado}
+\textbf{La celda mientras espera.} En cada ciclo:
+\begin{lstlisting}
+if (fb_wait)                      cell_pattern <= lut_pattern;  // respuesta
+else if (target_valid && sw_hint) cell_pattern <= lut_pattern;  // pista
+else                              cell_pattern <= 6'b000000;    // vacia
+\end{lstlisting}
+Con SW2 = 1, los servos muestran la \cod{m} como pista. Con SW2 = 0, la celda está vacía.
+\end{paso}
+
+\begin{paso}{gris}
+\textbf{El usuario teclea.} Igual que en escritura:
+\cod{button\_conditioner} $\to$ \cod{chord\_capture} $\to$ \cod{chord\_reg = 001101}
+y \cod{chord\_pend = 1}.
+\end{paso}
+
+\begin{paso}{azul}
+\textbf{Comparar.} En ST\_IDLE (prioridad 5), modo práctica y
+\cod{target\_valid = 1}:
+\begin{lstlisting}
+wire is_hit = (chord_reg == lut_pattern);   // 001101 == 001101 -> acierto
+if (is_hit) begin hits <= hits + 1;   msg_data <= {..., typed_ascii, "O"}; end
+else        begin misses <= misses + 1; msg_data <= {..., typed_ascii, "X"}; end
+target_valid <= 0;   fb_wait <= 1;   fb_cnt <= 0;
+last_try <= (rounds_cfg != 0) && (hits + misses + 1 >= rounds_cfg);
+\end{lstlisting}
+Deben coincidir los 6 puntos. El mensaje lleva la letra tecleada y el marcador en
+hex: con 1 acierto y 0 errores, \cod{Om0100}.
+\end{paso}
+
+\begin{paso}{ambar}
+\textbf{Avisar a MATLAB.} \cod{msg\_tx} envía 7 bytes
+(\cod{O m 0 1 0 0 \textbackslash n}). MATLAB convierte con \cod{hex2dec}, calcula la
+precisión, pinta la letra de verde (o rojo), dice ``Correcto'' y agrega un punto a la
+gráfica. Los displays HEX3--HEX0 muestran \cod{01 00}.
+\end{paso}
+
+\begin{paso}{morado}
+\textbf{Retroalimentación (2 segundos).} Con \cod{fb\_wait = 1}, la
+celda muestra la letra correcta y \cod{fb\_cnt} cuenta 100\,000\,000 ciclos. Durante
+ese tiempo los acordes se ignoran (\cod{target\_valid = 0}).
+\end{paso}
+
+\begin{paso}{morado}
+\textbf{¿Otra letra o fin?} Al terminar el tiempo, \cod{fb\_wait = 0} y:
+\begin{itemize}[leftmargin=*]
+  \item si \cod{last\_try = 0} $\to$ \cod{need\_target = 1} y se vuelve al paso 3;
+  \item si \cod{last\_try = 1} $\to$ \cod{need\_final = 1}: en ST\_IDLE (prioridad 3)
+        envía \cod{F} + aciertos + errores (por ejemplo \cod{F0802}) y pone
+        \cod{sess\_done = 1}.
+\end{itemize}
+\end{paso}
+
+\begin{paso}{gris}
+\textbf{Después del final.} MATLAB muestra el resultado y lo dice en voz
+alta. Los acordes se ignoran. Un NEXT empieza una sesión nueva: marcador en cero,
+envía \cod{MP} y pide letra.
+\end{paso}
+
+\subsection{NEXT en práctica}
+\begin{center}
+\begin{tabularx}{\linewidth}{>{\raggedright}p{5cm} >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Momento} & \textbf{Efecto} \\
+\midrule
+Esperando respuesta & Salta la letra: \cod{target\_valid = 0}, \cod{need\_target = 1}. No cuenta como intento \\
+Durante los 2 s & Se ignora \\
+Sesión terminada & Empieza otra sesión \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Diagrama de secuencia de una letra}
+\begin{center}
+\begin{tikzpicture}[yscale=0.58]
+\node[bx] (u) at (0,0) {Usuario};
+\node[bx,draw=ambar,fill=ambarsuave] (m) at (4,0) {MATLAB};
+\node[bx,fill=tinta,text=white,draw=tinta] (f) at (9,0) {FPGA};
+\node[bx,draw=morado,fill=moradosuave] (s) at (13.2,0) {Servos};
+\foreach \x in {0,4,9,13.2}{\draw[gris,dashed] (\x,-0.6) -- (\x,-12.6);}
+\draw[->,thick] (0,-1.3) -- node[msg,above]{SW = 11} (9,-1.3);
+\draw[->,thick,ambar] (9,-2.2) -- node[msg,above]{MP\textbackslash n} (4,-2.2);
+\draw[->,thick,verde] (4,-3.1) -- node[msg,above]{L10\textbackslash n} (9,-3.1);
+\draw[->,thick,ambar] (9,-4.0) -- node[msg,above]{Tm\textbackslash n} (4,-4.0);
+\draw[->,thick,ambar] (9,-4.9) -- node[msg,above]{L0A\textbackslash n} (4,-4.9);
+\draw[->,thick] (4,-5.8) -- node[msg,above]{``letra m''} (0,-5.8);
+\draw[->,thick,morado,dashed] (9,-6.4) -- node[msg,above]{pista si SW2} (13.2,-6.4);
+\draw[->,thick] (0,-7.6) -- node[msg,above]{acorde 1-3-4} (9,-7.6);
+\node[lab,anchor=west] at (9.1,-8.3) {is\_hit = 1, hits + 1};
+\draw[->,thick,ambar] (9,-9.2) -- node[msg,above]{Om0100\textbackslash n} (4,-9.2);
+\draw[->,thick,morado] (9,-9.9) -- node[msg,above]{001101 (2 s)} (13.2,-9.9);
+\draw[->,thick] (4,-10.8) -- node[msg,above]{verde, ``correcto''} (0,-10.8);
+\draw[->,thick,ambar] (9,-12.0) -- node[msg,above]{T + nueva letra} (4,-12.0);
+\end{tikzpicture}
+\end{center}
+\begin{center}\small (El orden exacto de \cod{Tm} y \cod{L0A} depende de cuándo llega \cod{L10}; ambos son independientes.)\end{center}
+
+% =====================================================================
+\section{Los servomotores}\label{sec:servos}
+
+\subsection{Cómo se controla un servo}
+Un servo SG90 se posiciona según la \textbf{duración de un pulso} que se repite cada
+\textbf{20 ms} (50 Hz). Un pulso de $\sim$1 ms lo lleva a un extremo, 1.5 ms al centro
+y 2 ms al otro extremo. A esto se le llama PWM (modulación por ancho de pulso).
+
+\begin{center}
+\begin{tikzpicture}[yscale=0.75,xscale=0.62]
+\node[lab,anchor=east] at (-0.2,2.5) {pulso corto};
+\node[lab,anchor=east] at (-0.2,0.5) {pulso largo};
+\draw[thick,verde] (0,2) -- (0,3) -- (1.16,3) -- (1.16,2) -- (20,2) -- (20,3) -- (21.16,3) -- (21.16,2) -- (23,2);
+\draw[thick,ambar] (0,0) -- (0,1) -- (2,1) -- (2,0) -- (20,0) -- (20,1) -- (22,1) -- (22,0) -- (23,0);
+\draw[<->] (0,-0.6) -- node[below,lab]{periodo: 20 ms = 1\,000\,000 ciclos de 50 MHz} (20,-0.6);
+\node[lab,anchor=west] at (1.3,3.3) {1.16 ms};
+\node[lab,anchor=west] at (2.1,1.3) {2.00 ms};
+\end{tikzpicture}
+\end{center}
+
+\subsection{El contador compartido}
+\cod{servo\_controller} usa \textbf{un solo contador} para los seis servos, porque
+todos tienen el mismo periodo:
+\begin{lstlisting}
+if (pwm_count == PERIOD - 1) begin      // PERIOD = 1 000 000 (20 ms)
+    pwm_count      <= 0;
+    pattern_active <= braille_pattern;  // copia el patron SOLO aqui
+end else
+    pwm_count <= pwm_count + 1;
+\end{lstlisting}
+\begin{itemize}
+  \item El contador es de 20 bits porque debe llegar a 999\,999 ($2^{20} = 1\,048\,576$).
+  \item El patrón se copia \textbf{solo al inicio de cada periodo}: si cambiara a la
+        mitad de un pulso, ese pulso saldría recortado y el servo daría un tirón.
+\end{itemize}
+
+\subsection{Cada canal}
+Un \cod{generate for} crea seis comparadores, uno por servo:
+\begin{lstlisting}
+// puntos 1, 2, 3 (columna izquierda)
+assign servo_pwm[i] = pwm_count < (pattern_active[i] ? PULSE_UP_L : PULSE_DOWN_L);
+// puntos 4, 5, 6 (columna derecha)
+assign servo_pwm[i] = pwm_count < (pattern_active[i] ? PULSE_UP_R : PULSE_DOWN_R);
+\end{lstlisting}
+Mientras el contador no llegue al ancho elegido, la salida vale 1; después, 0. Si el
+bit del punto es 1 se usa el ancho de ``arriba''; si es 0, el de ``abajo''.
+
+\subsection{Calibración y montaje en espejo}
+Los servos de cada columna están montados \textbf{enfrentados}. Para que los dos
+levanten su punto deben girar en sentidos opuestos, por eso cada columna tiene sus
+propios anchos (fijados en \cod{braille\_top}):
+
+\begin{center}
+\begin{tabular}{l c c c c}
+\toprule
+\textbf{Columna} & \multicolumn{2}{c}{\textbf{Abajo}} & \multicolumn{2}{c}{\textbf{Arriba}} \\
+ & ciclos & ms & ciclos & ms \\
+\midrule
+Izquierda (puntos 1, 2, 3) & 70\,000 & 1.40 & 58\,000 & 1.16 \\
+Derecha (puntos 4, 5, 6) & 80\,000 & 1.60 & 100\,000 & 2.00 \\
+\bottomrule
+\end{tabular}
+\end{center}
+La izquierda \textbf{acorta} el pulso para subir y la derecha lo \textbf{alarga}.
+Como referencia, a 50 MHz un grado del SG90 son $\approx 278$ ciclos.
+
+\begin{ojo}[Dónde se calibra]
+Los valores reales son los parámetros \cod{PULSE\_*} de \cod{braille\_top.v}. Los de
+\cod{servo\_controller.v} son solo valores por defecto: el top los reemplaza.
+\end{ojo}
+
+\subsection{Ejemplo completo: la letra h}
+\cod{cell\_pattern = 010011} (puntos 1, 2 y 5):
+\begin{center}
+\begin{tikzpicture}
+\begin{scope}
+\foreach \c/\r/\n in {0/0/1,0/1/2,1/1/5}{
+  \fill[morado] (\c*1.1,-\r*1.1) circle (0.38);
+  \node[font=\scriptsize\bfseries,text=white] at (\c*1.1,-\r*1.1) {\n};}
+\foreach \c/\r/\n in {0/2/3,1/0/4,1/2/6}{
+  \draw[very thick,gris] (\c*1.1,-\r*1.1) circle (0.38);
+  \node[font=\scriptsize\bfseries,text=gris] at (\c*1.1,-\r*1.1) {\n};}
+\node[lab] at (0.55,-3.1) {celda: h};
+\end{scope}
+\node[anchor=west,font=\small] at (2.2,-1.1) {
+\begin{tabular}{l c c c c}
+\toprule
+\textbf{Servo} & \textbf{Punto} & \textbf{Bit} & \textbf{Pulso} & \textbf{Posición} \\
+\midrule
+SERVO[0] & 1 & 1 & 58\,000 (1.16 ms) & arriba \\
+SERVO[1] & 2 & 1 & 58\,000 (1.16 ms) & arriba \\
+SERVO[2] & 3 & 0 & 70\,000 (1.40 ms) & abajo \\
+SERVO[3] & 4 & 0 & 80\,000 (1.60 ms) & abajo \\
+SERVO[4] & 5 & 1 & 100\,000 (2.00 ms) & arriba \\
+SERVO[5] & 6 & 0 & 80\,000 (1.60 ms) & abajo \\
+\bottomrule
+\end{tabular}};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Qué patrón muestran los servos en cada modo}
+Quien decide el patrón es el controller (\cod{cell\_pattern}). Esta tabla resume
+todos los casos:
+
+\begin{center}
+\begin{tabularx}{\linewidth}{l >{\raggedright}X >{\raggedright\arraybackslash}p{4.6cm}}
+\toprule
+\textbf{Modo} & \textbf{Situación} & \textbf{\cod{cell\_pattern}} \\
+\midrule
+Reposo & Siempre & \cod{000000} (todos abajo) \\
+Lectura & Sin palabra o tras \cod{E} & \cod{000000} \\
+Lectura & Mostrando la letra \cod{i} & \cod{ascii\_to\_braille(buffer[i])} \\
+Escritura & Siempre & \cod{000000} (los LEDs muestran los botones) \\
+Práctica & Esperando respuesta, SW2 = 0 & \cod{000000} \\
+Práctica & Esperando respuesta, SW2 = 1 (pista) & patrón de la letra objetivo \\
+Práctica & 2 s después de responder & patrón de la letra objetivo \\
+Práctica & Sesión terminada & \cod{000000} \\
+Cualquiera & Al cambiar de modo o con reset & \cod{000000} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{El camino completo hasta el servo}
+\begin{center}
+\resizebox{\linewidth}{!}{\begin{tikzpicture}[node distance=1.2cm,->,thick]
+\node[bx,minimum width=2.4cm] (a) {letra\\('h')};
+\node[bx,right=of a,minimum width=2.4cm] (b) {ascii\_to\_\\braille};
+\node[bx,right=of b,minimum width=2.4cm,fill=tinta,text=white,draw=tinta] (c) {controller\\cell\_pattern};
+\node[bx,right=of c,minimum width=2.4cm,draw=morado,fill=moradosuave] (d) {servo\_\\controller};
+\node[bx,right=of d,minimum width=1.6cm] (e) {SERVO\\{[5:0]}};
+\draw (a) -- (b); \draw (b) -- node[lab,above]{010011} (c);
+\draw (c) -- (d); \draw (d) -- node[lab,above]{PWM} (e);
+\end{tikzpicture}}
+\end{center}
+
+\begin{idea}[En resumen]
+\textbf{Qué} puntos suben lo decide el controller según el modo; \textbf{cuánto}
+giran lo fijan los parámetros \cod{PULSE\_*} del top; \textbf{cómo} se genera la
+señal lo hace \cod{servo\_controller} con un contador de 20 ms compartido y un
+comparador por servo.
+\end{idea}
+
+\end{document}

@@ -21,13 +21,15 @@
 //====================================================
 
 module servo_controller #(
+    // OJO: estos son solo valores POR DEFECTO.
+    // Los valores reales se fijan en braille_top.v, que los reemplaza.
+    // Para calibrar los servos, cambia los de braille_top.v.
     parameter PERIOD        = 1000000,   // 20 ms
-        // Servos izquierda (puntos 1,2,3) y derecha (4,5,6, en espejo)
-    // (arriba/abajo intercambiados: los puntos bajaban en vez de subir)
-    parameter PULSE_DOWN_L   = 82000,     // 1.64 ms  izquierda abajo
-    parameter PULSE_UP_L     = 70000,     // 1.40 ms  izquierda arriba
-    parameter PULSE_DOWN_R   = 60000,     // 1.20 ms  derecha abajo
-    parameter PULSE_UP_R     = 80000,     // 1.60 ms  derecha arriba
+    // Servos izquierda (puntos 1,2,3) y derecha (4,5,6, en espejo)
+    parameter PULSE_DOWN_L  = 70000,     // 1.40 ms  izquierda abajo
+    parameter PULSE_UP_L    = 58000,     // 1.16 ms  izquierda arriba
+    parameter PULSE_DOWN_R  = 80000,     // 1.60 ms  derecha abajo
+    parameter PULSE_UP_R    = 100000,    // 2.00 ms  derecha arriba
     parameter COUNTER_WIDTH = 20
 )(
     input  wire       clk,

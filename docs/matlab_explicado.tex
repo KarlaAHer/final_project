@@ -1,0 +1,1232 @@
+% =====================================================================
+%  Explicacion detallada de la interfaz MATLAB (braille_gui)
+%  Proyecto: Sistema bidireccional Texto <-> Braille en FPGA (DE10-Lite)
+%  Compilar con:  pdflatex matlab_explicado.tex   (dos veces, para el indice)
+% =====================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noshorthands,es-tabla]{babel}
+\usepackage{lmodern}
+\usepackage{amssymb}
+\usepackage[margin=2.3cm]{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage[most]{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage[hidelinks]{hyperref}
+
+% ---------------- Colores ----------------
+\definecolor{tinta}{HTML}{13202B}
+\definecolor{verde}{HTML}{137366}
+\definecolor{verdesuave}{HTML}{DCEFEB}
+\definecolor{ambar}{HTML}{9A520C}
+\definecolor{ambarsuave}{HTML}{F8E6D3}
+\definecolor{gris}{HTML}{5B6874}
+\definecolor{fondocodigo}{HTML}{F4F6F7}
+\definecolor{comentario}{HTML}{2F7D32}
+\definecolor{cadena}{HTML}{A0306A}
+\definecolor{clave}{HTML}{1F4E9A}
+
+% ---------------- Titulos ----------------
+\titleformat{\section}{\Large\bfseries\color{tinta}}{\thesection}{0.8em}{}[\vspace{-0.4em}\textcolor{verde}{\rule{\linewidth}{1pt}}]
+\titleformat{\subsection}{\large\bfseries\color{tinta}}{\thesubsection}{0.7em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{verde}}{\thesubsubsection}{0.6em}{}
+
+% ---------------- Encabezado ----------------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{gris}Interfaz MATLAB \textendash{} Sistema Braille FPGA}
+\fancyhead[R]{\small\color{gris}\leftmark}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---------------- Codigo MATLAB ----------------
+\lstdefinestyle{matlab}{
+  language=Matlab,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{clave}\bfseries,
+  commentstyle=\color{comentario}\itshape,
+  stringstyle=\color{cadena},
+  backgroundcolor=\color{fondocodigo},
+  frame=single, rulecolor=\color{gris!40},
+  framesep=6pt, xleftmargin=8pt, xrightmargin=8pt,
+  numbers=left, numberstyle=\tiny\color{gris}, numbersep=6pt,
+  breaklines=true, breakatwhitespace=true,
+  showstringspaces=false, columns=fullflexible, keepspaces=true,
+  morekeywords={uifigure,uigridlayout,uilabel,uidropdown,uibutton,uicheckbox,uipanel,uieditfield,uitextarea,uispinner,uiaxes,serialport,serialportlist,configureTerminator,configureCallback,flush,write,read,uialert,hex2dec,sprintf,isempty,numel,find,strtrim,datetime},
+  literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1 {ñ}{{\~n}}1 {→}{{$\rightarrow$}}1
+}
+\lstset{style=matlab}
+\newcommand{\linea}[1]{\textcolor{gris}{\small(líneas #1)}}
+
+% ---------------- Cajas ----------------
+\newtcolorbox{idea}[1][Idea clave]{colback=verdesuave,colframe=verde,fonttitle=\bfseries,title=#1,arc=2mm,boxrule=0.8pt}
+\newtcolorbox{ojo}[1][Atención]{colback=ambarsuave,colframe=ambar,fonttitle=\bfseries,title=#1,arc=2mm,boxrule=0.8pt}
+\newtcolorbox{pregunta}[1]{colback=white,colframe=tinta,fonttitle=\bfseries,title={P: #1},arc=2mm,boxrule=0.6pt,breakable}
+\newtcolorbox{diagrama}{fontupper=\footnotesize,colback=fondocodigo,colframe=gris!40,arc=2mm,boxrule=0.6pt,left=6pt,right=6pt}
+
+\newcommand{\cod}[1]{\texttt{#1}}
+\setlist{itemsep=2pt,topsep=4pt}
+\setlength{\emergencystretch}{3em}
+\renewcommand{\arraystretch}{1.25}
+
+% =====================================================================
+\begin{document}
+
+% ---------------- Portada ----------------
+\begin{titlepage}
+\centering
+\vspace*{3cm}
+{\color{verde}\large\bfseries PROYECTO FINAL \textendash{} DE10-LITE\par}
+\vspace{0.8cm}
+{\color{tinta}\Huge\bfseries Interfaz MATLAB del\\[0.2cm] Sistema Braille FPGA\par}
+\vspace{0.6cm}
+{\Large\color{gris} Explicación completa de \texttt{braille\_gui}\par}
+\vspace{1.5cm}
+\begin{minipage}{0.8\textwidth}
+\begin{idea}[Qué contiene este documento]
+Qué hace el programa, los conceptos de MATLAB que usa, cada variable, cada
+elemento de la ventana, cada función línea por línea, el protocolo de
+comunicación con la FPGA, los flujos completos de cada modo y una sección de
+preguntas frecuentes para responder en una presentación.
+\end{idea}
+\end{minipage}
+\vfill
+{\color{gris} Archivo del proyecto: \texttt{matlab} (se ejecuta como \texttt{braille\_gui.m})\par}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{Panorama general}
+
+\subsection{¿Qué es \texttt{braille\_gui}?}
+Es la \textbf{ventana de la computadora} que se comunica con la FPGA por el
+puerto serial (UART). Está escrita en MATLAB usando \emph{App Designer
+programático} (componentes \cod{ui...}) y no necesita toolboxes adicionales.
+
+\begin{idea}
+Toda la lógica del sistema vive en la FPGA. MATLAB \textbf{no decide nada}:
+solo \textbf{escucha} lo que reporta la FPGA, lo \textbf{muestra} en pantalla,
+lo \textbf{dice en voz alta} y, en dos casos, \textbf{envía} datos.
+\end{idea}
+
+\subsection{Qué hace y qué no hace}
+\begin{center}
+\begin{tabularx}{\linewidth}{>{\raggedright}X >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{MATLAB sí hace} & \textbf{MATLAB no hace (lo hace la FPGA)} \\
+\midrule
+Abrir el puerto serial a 9600 baudios & Elegir el modo (lo eligen los switches) \\
+Mostrar el panel del modo actual & Convertir letras en puntos Braille \\
+Enviar la palabra en modo lectura (\cod{R}) & Elegir la letra de práctica (LFSR) \\
+Enviar cuántas letras tiene una sesión (\cod{L}) & Comparar y contar aciertos y errores \\
+Preguntar el modo al conectar (\cod{Q}) & Decidir cuándo termina una sesión \\
+Calcular el porcentaje y dibujar la gráfica & Mover los servos y leer los botones \\
+Hablar con la voz de Windows & \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Dónde está dentro del sistema}
+\begin{diagrama}
+\begin{verbatim}
+   +-------------------+      USB / Bluetooth      +------------------------+
+   |   PC (MATLAB)     |  <--------------------->  |   FPGA DE10-Lite       |
+   |   braille_gui     |     UART 9600 8N1         |   braille_top          |
+   |                   |                           |                        |
+   |  envia:  Q, R, L  |  ---- texto + \n ---->    |  line_rx -> controller |
+   |  recibe: M D E K  |  <--- texto + \n -----    |  controller -> msg_tx  |
+   |          T O X F  |                           |                        |
+   +-------------------+                           +------------------------+
+\end{verbatim}
+\end{diagrama}
+
+\subsection{Requisitos para ejecutarlo}
+\begin{itemize}
+  \item \textbf{MATLAB R2019b o más nuevo}: \cod{serialport} y los componentes
+        \cod{ui...} aparecieron en esa versión.
+  \item \textbf{Windows} para la voz (usa la librería \cod{System.Speech} de .NET).
+        En otro sistema el programa funciona, solo que sin voz.
+  \item \textbf{El nombre del archivo}: en el repositorio se llama \cod{matlab}, sin
+        extensión. Para ejecutarlo debe guardarse como \cod{braille\_gui.m}, porque
+        MATLAB exige que el archivo se llame igual que su función principal.
+  \item Se ejecuta escribiendo \cod{braille\_gui} en la ventana de comandos.
+\end{itemize}
+
+% =====================================================================
+\section{Conceptos de MATLAB que usa el programa}
+
+\subsection{Sintaxis básica}
+\begin{longtable}{>{\ttfamily}p{3.6cm} p{10.6cm}}
+\toprule
+\normalfont\textbf{Escritura} & \textbf{Significado} \\
+\midrule
+\endhead
+\% texto & Comentario: MATLAB lo ignora. \\
+x = 5; & Asigna un valor. El \cod{;} evita que se imprima en la consola. \\
+'hola' & Texto tipo \textbf{char} (comillas simples): un arreglo de caracteres. \\
+"hola" & Texto tipo \textbf{string} (comillas dobles). Se pueden unir con \cod{+}: \cod{"R" + "hola"} $\rightarrow$ \cod{"Rhola"}. \\
+{[}a b{]} & Une elementos en un arreglo. Con char: \cod{['ho' 'la']} $\rightarrow$ \cod{'hola'}. \\
+m(2) & Elemento número 2. \textbf{En MATLAB los índices empiezan en 1}, no en 0. \\
+m(3:4) & Elementos del 3 al 4. \\
+end (en índice) & El último elemento: \cod{x(end+1) = v} agrega \cod{v} al final. \\
+{[}{]} \ y \ '' & Vacío. \cod{isempty(x)} pregunta si está vacío. \\
+uint8(x) & Convierte a entero de 0 a 255, o sea un \textbf{byte}. \cod{uint8('A')} $\rightarrow$ 65. \\
+char(x) & Convierte números a caracteres. \cod{char(65)} $\rightarrow$ \cod{'A'}. \\
+\textasciitilde & Negación lógica (\cod{\textasciitilde isempty(s)}) o ``ignorar argumento'' (\cod{f(\textasciitilde, \textasciitilde)}). \\
+@nombre & Referencia a una función, para que otro la llame después (callback). \\
+@(a,b) expr & Función anónima: una mini función escrita en una línea. \\
+{[}r g b{]} & Color con valores de 0 a 1. \cod{[0.75 0 0]} es rojo oscuro. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Funciones anidadas: variables compartidas}
+Todo el programa es \textbf{una función grande} (\cod{braille\_gui}) que contiene
+\textbf{funciones pequeñas adentro} (\cod{conectar}, \cod{enviar}, \cod{procesar}, \ldots).
+
+\begin{lstlisting}
+function braille_gui()
+    s = [];                       % variable de la funcion grande
+    function conectar(~, ~)
+        s = serialport(...);      % la funcion de adentro la modifica
+    end
+end
+\end{lstlisting}
+
+\begin{idea}
+Las funciones anidadas \textbf{comparten las variables} de la función que las
+contiene. Por eso \cod{s}, \cod{rxbuf}, \cod{texto}, \cod{histAcc}, etc. se pueden
+leer y modificar desde cualquier parte del programa sin pasarlas como
+argumento. Funcionan como ``variables globales'' pero solo dentro de este
+programa.
+\end{idea}
+
+\subsection{Programación por eventos (callbacks)}
+Un \textbf{callback} es una función que MATLAB ejecuta \textbf{automáticamente}
+cuando ocurre algo:
+
+\begin{center}
+\begin{tabular}{>{\raggedright}p{6.4cm} >{\ttfamily\raggedright\arraybackslash}p{6.8cm}}
+\toprule
+\textbf{Evento} & \normalfont\textbf{Callback que se ejecuta} \\
+\midrule
+Presionar el botón Conectar & conectar \\
+Presionar ``Enviar palabra'' & enviarPalabra \\
+Cambiar el número de letras & cambiarN \\
+Presionar ``Leer en voz alta'' & @(\textasciitilde,\textasciitilde) hablar(texto) \\
+Presionar ``Borrar'' & borrarTexto \\
+Llega un \textbackslash n por el puerto serial & alRecibir \\
+Cerrar la ventana & cerrar \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{idea}[Consecuencia importante]
+El programa \textbf{no tiene un ciclo principal}. Después de construir la ventana,
+la función \cod{braille\_gui} termina y MATLAB se queda esperando eventos. Cada
+botón o cada dato que llega dispara su callback.
+\end{idea}
+
+% =====================================================================
+\section{Mapa del archivo}
+
+\begin{center}
+\begin{tabular}{>{\raggedright}p{3.2cm} >{\raggedright}p{4.6cm} >{\raggedright\arraybackslash}p{6.2cm}}
+\toprule
+\textbf{Líneas} & \textbf{Bloque} & \textbf{Contenido} \\
+\midrule
+1--19 & Encabezado & Comentario con el propósito y el uso \\
+21--32 & Configuración & Constantes y variables de estado \\
+34--129 & Ventana & Construcción de toda la interfaz \\
+135--186 & Conexión y recepción & \cod{listaPuertos}, \cod{conectar}, \cod{enviar}, \cod{alRecibir} \\
+192--315 & Mensajes de la FPGA & \cod{procesar}, \cod{mostrarModo}, \cod{nombreModo} \\
+321--332 & Práctica & \cod{enviarN}, \cod{cambiarN} \\
+338--348 & Lectura & \cod{enviarPalabra} \\
+354--376 & Escritura & \cod{letraEscrita}, \cod{borrarTexto} \\
+382--409 & Utilidades & \cod{registrar}, \cod{hablar}, \cod{cerrar} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% =====================================================================
+\section{Configuración y variables de estado}
+\linea{21--32}
+
+\begin{lstlisting}[firstnumber=21]
+    BAUD    = 9600;
+    MAX_LEN = 16;          % Debe coincidir con MAX_LEN en la FPGA
+
+    s      = [];           % serialport
+    rxbuf  = uint8([]);    % bytes recibidos sin procesar
+    synth  = [];           % voz
+    texto  = '';           % escritura
+    palabraW = '';
+    histAcc   = [];           % precision tras cada intento (practica)
+    modoAct   = 'I';          % modo que reporto la FPGA
+    nLetras   = 10;           % letras por sesion (lo cuenta la FPGA)
+    intentos  = 0;            % intentos hechos en la sesion
+\end{lstlisting}
+
+\begin{longtable}{>{\ttfamily}p{2.3cm} p{4.6cm} p{7.2cm}}
+\toprule
+\normalfont\textbf{Variable} & \textbf{Qué guarda} & \textbf{Por qué existe} \\
+\midrule
+\endhead
+BAUD & 9600 & Velocidad del puerto. \textbf{Debe ser igual} a la de la FPGA (\cod{CLKS\_PER\_BIT = 50\,000\,000 / 9600}). \\
+MAX\_LEN & 16 & Máximo de letras por palabra. Igual que en la FPGA, para avisar antes de enviar una palabra demasiado larga. \\
+s & El objeto del puerto serial & Vacío (\cod{[]}) significa ``no conectado''. \\
+rxbuf & Bytes recibidos sin procesar & Los mensajes pueden llegar en pedazos; aquí se acumulan hasta tener un \cod{\textbackslash n}. \\
+synth & El sintetizador de voz & Se crea la primera vez que el programa habla y se reutiliza. \\
+texto & Todo lo escrito en modo escritura & Para mostrarlo en el área de texto. \\
+palabraW & La palabra actual en escritura & Para leerla completa en voz alta cuando llega un espacio. \\
+histAcc & Lista de precisiones (\%) & Cada intento agrega un valor; con ella se dibuja la gráfica. \\
+modoAct & \cod{'I'}, \cod{'R'}, \cod{'W'} o \cod{'P'} & El modo que reportó la FPGA. Se usa para saber si enviar \cod{L}. \\
+nLetras & Letras por sesión & Para mostrar ``Letra 3 de 10''. \\
+intentos & Intentos de la sesión & Ídem. Se calcula como aciertos + errores. \\
+\bottomrule
+\end{longtable}
+
+% =====================================================================
+\section{La ventana}
+\linea{34--129}
+
+\subsection{Distribución general}
+\begin{diagrama}
+\begin{verbatim}
++---------------------------- Braille FPGA ----------------------------+
+| Puerto: [COM5 v] [refrescar] [Conectar]  Desconectado        [x] Voz | Fila 1 (34 px)
++----------------------------------------------------------------------+
+|                         MODO: LECTURA                                | Fila 2 (50 px)
++----------------------------------------------------------------------+
+|                                                                      |
+|     Un solo panel visible segun el modo:                             | Fila 3 ('1x')
+|     Reposo / Lectura / Escritura / Practica                          |
+|                                                                      |
++----------------------------------------------------------------------+
+| [12:01:05] Conectado a COM5.                                         | Fila 4 (110 px)
++----------------------------------------------------------------------+
+\end{verbatim}
+\end{diagrama}
+
+\begin{lstlisting}[firstnumber=35]
+    fig = uifigure('Name', 'Braille FPGA', 'Position', [100 80 900 640]);
+    fig.CloseRequestFcn = @cerrar;
+
+    g = uigridlayout(fig, [4 1]);
+    g.RowHeight = {34, 50, '1x', 110};
+\end{lstlisting}
+
+\begin{itemize}
+  \item \cod{uifigure}: crea la ventana con título ``Braille FPGA'', en la posición
+        $(100, 80)$ y de $900 \times 640$ píxeles.
+  \item \cod{CloseRequestFcn = @cerrar}: al cerrar la ventana se ejecuta
+        \cod{cerrar}, que libera el puerto.
+  \item \cod{uigridlayout(fig, [4 1])}: divide la ventana en una cuadrícula de 4
+        filas y 1 columna. Los elementos se acomodan solos.
+  \item \cod{RowHeight = \{34, 50, '1x', 110\}}: alto de cada fila. \cod{'1x'}
+        significa ``todo el espacio que sobre''.
+\end{itemize}
+
+\subsection{Fila 1: barra de conexión}
+\begin{lstlisting}[firstnumber=42]
+    g1 = uigridlayout(g, [1 6]);
+    g1.ColumnWidth = {55, 110, 34, 100, '1x', 60};
+    g1.Padding = [0 0 0 0];
+    uilabel(g1, 'Text', 'Puerto:');
+    ddPort = uidropdown(g1, 'Items', listaPuertos());
+    uibutton(g1, 'Text', char(8635), 'Tooltip', 'Actualizar puertos', ...
+             'ButtonPushedFcn', @(~, ~) set(ddPort, 'Items', listaPuertos()));
+    btnCon = uibutton(g1, 'Text', 'Conectar', 'ButtonPushedFcn', @conectar);
+    lblEst = uilabel(g1, 'Text', 'Desconectado', 'FontColor', [0.75 0 0]);
+    chkVoz = uicheckbox(g1, 'Text', 'Voz', 'Value', true);
+\end{lstlisting}
+
+\begin{center}
+\begin{tabular}{>{\ttfamily}l l >{\raggedright\arraybackslash}p{7.5cm}}
+\toprule
+\normalfont\textbf{Variable} & \textbf{Componente} & \textbf{Función} \\
+\midrule
+--- & \cod{uilabel} & Texto fijo ``Puerto:'' \\
+ddPort & \cod{uidropdown} & Lista desplegable para elegir el COM \\
+--- & \cod{uibutton} & Botón $\circlearrowright$ (\cod{char(8635)}) que vuelve a buscar puertos \\
+btnCon & \cod{uibutton} & Conectar / Desconectar (el mismo botón) \\
+lblEst & \cod{uilabel} & Estado: rojo ``Desconectado'' o verde ``Conectado COM5'' \\
+chkVoz & \cod{uicheckbox} & Activa o desactiva la voz \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+El botón de refrescar usa una \textbf{función anónima}:
+\cod{@(\textasciitilde, \textasciitilde) set(ddPort, 'Items', listaPuertos())}. Al
+presionarlo, pide de nuevo la lista de puertos y la pone en el desplegable.
+
+\subsection{Fila 2: modo actual}
+\begin{lstlisting}[firstnumber=54]
+    lblModo = uilabel(g, 'Text', 'MODO: -   (se elige con SW1-SW0 en la tarjeta)', ...
+                      'FontSize', 24, 'FontWeight', 'bold', ...
+                      'HorizontalAlignment', 'center');
+\end{lstlisting}
+Un texto grande y centrado. \cod{mostrarModo} lo cambia a ``MODO: LECTURA'', etc.
+
+\subsection{Fila 3: un panel por modo}
+\begin{idea}[El truco de los paneles]
+Los cuatro paneles se colocan \textbf{en la misma celda}, uno encima de otro. Solo
+se hace visible (\cod{Visible = true}) el del modo actual. Así la ventana cambia
+de contenido sin crear ni destruir componentes.
+\end{idea}
+
+\begin{lstlisting}[firstnumber=59]
+    area = uigridlayout(g, [1 1]);         % una sola celda
+    pI = uipanel(area, 'BorderType', 'none');   % Reposo
+    pR = uipanel(area, ...); pR.Layout.Row = 1; pR.Layout.Column = 1;  % Lectura
+    pW = uipanel(area, ...); ...           % Escritura (misma celda)
+    pP = uipanel(area, ...); ...           % Practica  (misma celda)
+\end{lstlisting}
+
+\subsubsection{Panel Reposo (\texttt{pI})}
+Solo un texto con instrucciones: qué combinación de switches elige cada modo.
+
+\subsubsection{Panel Lectura (\texttt{pR})}
+\begin{center}
+\begin{tabular}{>{\ttfamily}l l >{\raggedright\arraybackslash}p{8cm}}
+\toprule
+\normalfont\textbf{Variable} & \textbf{Componente} & \textbf{Función} \\
+\midrule
+edPal & \cod{uieditfield} & Campo donde se escribe la palabra (máximo 16) \\
+--- & \cod{uibutton} & ``Enviar palabra'' $\rightarrow$ llama a \cod{enviarPalabra} \\
+lblLetra & \cod{uilabel} & La letra que muestran los servos, en tamaño 150 \\
+lblProg & \cod{uilabel} & Mensaje de ayuda o progreso \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsubsection{Panel Escritura (\texttt{pW})}
+\begin{center}
+\begin{tabular}{>{\ttfamily}l l >{\raggedright\arraybackslash}p{8cm}}
+\toprule
+\normalfont\textbf{Variable} & \textbf{Componente} & \textbf{Función} \\
+\midrule
+taTexto & \cod{uitextarea} & Todo lo tecleado en Braille (no editable) \\
+lblUlt & \cod{uilabel} & Última letra recibida o ``Patrón no reconocido'' \\
+--- & \cod{uibutton} & ``Leer en voz alta'' $\rightarrow$ \cod{hablar(texto)} \\
+--- & \cod{uibutton} & ``Borrar'' $\rightarrow$ \cod{borrarTexto} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsubsection{Panel Práctica (\texttt{pP})}
+\begin{center}
+\begin{tabular}{>{\ttfamily}l l >{\raggedright\arraybackslash}p{8cm}}
+\toprule
+\normalfont\textbf{Variable} & \textbf{Componente} & \textbf{Función} \\
+\midrule
+spnN & \cod{uispinner} & Letras por sesión, de 0 a 99 (0 = sin límite). Al cambiar llama a \cod{cambiarN} \\
+lblRes & \cod{uilabel} & ``Letra 3 de 10'', ``Correcto!'', ``Incorrecto: escribiste K'' \\
+lblObj & \cod{uilabel} & Letra objetivo en grande; verde si acierto, rojo si error \\
+lblStats & \cod{uilabel} & Aciertos, errores y precisión \\
+ax & \cod{uiaxes} & Gráfica de precisión acumulada (eje Y de 0 a 100 \%) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Fila 4: registro}
+\begin{lstlisting}[firstnumber=126]
+    taLog = uitextarea(g, 'Editable', 'off', 'FontName', 'Consolas', 'Value', {''});
+\end{lstlisting}
+Un área de texto con todo lo que ocurre, con hora. La llena \cod{registrar}.
+
+\subsection{Al terminar de construir}
+\begin{lstlisting}[firstnumber=128]
+    mostrarModo('I');
+    registrar('Selecciona el puerto y presiona Conectar.');
+\end{lstlisting}
+Muestra el panel de Reposo y escribe la primera línea del registro. Desde aquí,
+el programa solo reacciona a eventos.
+
+% =====================================================================
+\section{Conexión y envío}
+
+\subsection{\texttt{listaPuertos}: buscar puertos COM}
+\linea{135--138}
+\begin{lstlisting}[firstnumber=135]
+    function lst = listaPuertos()
+        lst = cellstr(serialportlist("available"));
+        if isempty(lst), lst = {'COM5'}; end
+    end
+\end{lstlisting}
+\begin{itemize}
+  \item \cod{serialportlist("available")}: pide al sistema los puertos seriales libres.
+  \item \cod{cellstr}: los convierte en el formato que necesita el desplegable.
+  \item Si no hay ninguno, pone \cod{'COM5'} como sugerencia para que la lista no quede vacía.
+\end{itemize}
+
+\subsection{\texttt{conectar}: abrir o cerrar el puerto}
+\linea{140--164}
+\begin{lstlisting}[firstnumber=140]
+    function conectar(~, ~)
+        if ~isempty(s)                       % desconectar
+            configureCallback(s, "off");
+            delete(s); s = [];
+            btnCon.Text = 'Conectar';
+            lblEst.Text = 'Desconectado'; lblEst.FontColor = [0.75 0 0];
+            registrar('Desconectado.');
+            return;
+        end
+        try
+            s = serialport(ddPort.Value, BAUD);
+        catch err
+            s = [];
+            uialert(fig, err.message, 'No se pudo abrir el puerto');
+            return;
+        end
+        configureTerminator(s, "LF");
+        flush(s);
+        rxbuf = uint8([]);
+        configureCallback(s, "terminator", @alRecibir);
+        btnCon.Text = 'Desconectar';
+        lblEst.Text = ['Conectado ' ddPort.Value]; lblEst.FontColor = [0 0.5 0];
+        registrar(['Conectado a ' ddPort.Value '.']);
+        enviar("Q");                         % la FPGA responde con su modo
+    end
+\end{lstlisting}
+
+\begin{longtable}{p{2.2cm} p{11.9cm}}
+\toprule
+\textbf{Paso} & \textbf{Qué hace} \\
+\midrule
+\endhead
+A. Desconectar (141--148) & Si \cod{s} no está vacío, ya había conexión: apaga el callback, cierra el puerto (\cod{delete}), vacía \cod{s}, regresa el botón a ``Conectar'' y el estado a rojo. \cod{return} sale de la función. \\
+B. Abrir (149--155) & \cod{serialport(puerto, 9600)} abre el COM elegido. Por defecto usa 8 bits de datos, sin paridad y 1 bit de stop (\textbf{8N1}), igual que la FPGA. \cod{try/catch}: si el puerto no existe o está ocupado, muestra una ventana de error (\cod{uialert}) en vez de detener el programa. \\
+C. Configurar (156--159) & \cod{configureTerminator(s, "LF")}: el fin de mensaje es el byte 10 (\cod{\textbackslash n}), igual que en la FPGA. \cod{flush}: borra basura previa. \cod{configureCallback(s, "terminator", @alRecibir)}: \textbf{cada vez que llegue un \cod{\textbackslash n}, ejecutar \cod{alRecibir}}. \\
+D. Interfaz (160--162) & El botón dice ``Desconectar'' y el estado se pone verde. \\
+E. Preguntar (163) & Envía \cod{Q}. MATLAB no puede ver los switches de la tarjeta, así que le pregunta a la FPGA en qué modo está. \\
+\bottomrule
+\end{longtable}
+
+\subsection{\texttt{enviar}: la única función que manda datos}
+\linea{166--172}
+\begin{lstlisting}[firstnumber=166]
+    function enviar(txt)
+        if isempty(s)
+            registrar('No conectado.');
+            return;
+        end
+        write(s, [uint8(char(txt)) 10], "uint8");
+    end
+\end{lstlisting}
+
+\begin{center}
+\begin{tabular}{>{\ttfamily}l >{\raggedright}p{6cm} >{\ttfamily\raggedright\arraybackslash}p{4.8cm}}
+\toprule
+\normalfont\textbf{Parte} & \textbf{Qué hace} & \normalfont\textbf{Con \cod{"Rhola"}} \\
+\midrule
+char(txt) & string $\rightarrow$ caracteres & 'Rhola' \\
+uint8(...) & caracteres $\rightarrow$ bytes & [82 104 111 108 97] \\
+{[}... 10{]} & agrega el byte 10 (\cod{\textbackslash n}) & [82 104 111 108 97 10] \\
+write(s, ..., "uint8") & manda los bytes por el puerto & 6 bytes por el cable \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{ojo}[¿Por qué \texttt{uint8(char(...))}?]
+Así cada carácter ocupa \textbf{exactamente un byte}. La \textbf{ñ} queda como el
+byte 241 (codificación Latin-1), que es el valor que la FPGA reconoce en
+\cod{ascii\_to\_braille}. Si se enviara en UTF-8 ocuparía 2 bytes y la FPGA no la
+reconocería.
+\end{ojo}
+
+% =====================================================================
+\section{Recepción: \texttt{alRecibir}}
+\linea{175--186}
+
+\begin{lstlisting}[firstnumber=175]
+    function alRecibir(src, ~)
+        n = src.NumBytesAvailable;
+        if n == 0, return; end
+        rxbuf = [rxbuf reshape(read(src, n, "uint8"), 1, [])];
+        while true
+            k = find(rxbuf == 10, 1);
+            if isempty(k), break; end
+            linea = rxbuf(1:k-1);
+            rxbuf(1:k) = [];
+            if ~isempty(linea), procesar(linea); end
+        end
+    end
+\end{lstlisting}
+
+\begin{idea}
+Esta función es el equivalente de \cod{line\_rx} de la FPGA, pero del lado de la
+PC: junta bytes hasta encontrar un \cod{\textbackslash n} y entrega cada mensaje
+completo a \cod{procesar}.
+\end{idea}
+
+\begin{center}
+\begin{tabular}{l >{\raggedright\arraybackslash}p{12cm}}
+\toprule
+\textbf{Línea} & \textbf{Qué hace} \\
+\midrule
+176--177 & Cuántos bytes hay esperando. Si ninguno, sale. \\
+178 & Los lee todos y los \textbf{agrega al final} de \cod{rxbuf}. \cod{reshape(..., 1, [])} los acomoda en una fila. \\
+179 & Ciclo: puede haber \textbf{varios mensajes juntos} en el buffer. \\
+180--181 & Busca el primer byte 10. \cod{k} es su posición. Si no hay, sale del ciclo. \\
+182 & El mensaje es todo lo que está \textbf{antes} del \cod{\textbackslash n}. \\
+183 & Borra del buffer el mensaje \textbf{y} su \cod{\textbackslash n}. \\
+184 & Si el mensaje no está vacío, lo procesa. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{Ejemplo: llegan dos mensajes juntos}
+\begin{diagrama}
+\begin{verbatim}
+rxbuf = [ 'D' 'h' 10 'D' 'o' 10 ]
+vuelta 1: k = 3 -> linea = "Dh" -> procesar("Dh") -> rxbuf = [ 'D' 'o' 10 ]
+vuelta 2: k = 3 -> linea = "Do" -> procesar("Do") -> rxbuf = [ ]
+vuelta 3: no hay 10 -> break
+\end{verbatim}
+\end{diagrama}
+
+\begin{ojo}[¿Por qué un buffer propio?]
+Los bytes pueden llegar en pedazos: por ejemplo \cod{D} en una lectura y
+\cod{h\textbackslash n} en la siguiente. El pedazo incompleto se queda en
+\cod{rxbuf} hasta que llega su \cod{\textbackslash n}, así ningún mensaje se procesa
+a medias.
+\end{ojo}
+
+% =====================================================================
+\section{Procesamiento de mensajes: \texttt{procesar}}
+\linea{192--286}
+
+\subsection{Preparación}
+\begin{lstlisting}[firstnumber=192]
+    function procesar(m)
+        c2 = ' ';
+        if numel(m) >= 2, c2 = char(m(2)); end
+
+        switch char(m(1))
+\end{lstlisting}
+\begin{itemize}
+  \item \cod{m}: el mensaje en bytes, sin el \cod{\textbackslash n}.
+  \item \cod{c2}: el \textbf{segundo carácter}, que casi siempre es el dato (la letra o
+        el modo). Si el mensaje tiene un solo carácter (como \cod{E}), queda en espacio.
+  \item \cod{switch char(m(1))}: decide según la \textbf{primera letra}, que indica el
+        tipo de mensaje.
+\end{itemize}
+
+\subsection{Cómo se leen las posiciones}
+\begin{center}
+\begin{tabular}{l c c c c c c}
+\toprule
+\textbf{Posición en MATLAB} & 1 & 2 & 3 & 4 & 5 & 6 \\
+\midrule
+Mensaje \cod{Om0301} & O & m & 0 & 3 & 0 & 1 \\
+Significado & tipo & letra & \multicolumn{2}{c}{aciertos} & \multicolumn{2}{c}{errores} \\
+Se lee con & \cod{m(1)} & \cod{c2} & \multicolumn{2}{c}{\cod{m(3:4)}} & \multicolumn{2}{c}{\cod{m(5:6)}} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Tabla resumen de mensajes}
+\begin{longtable}{>{\ttfamily}p{2cm} p{3.6cm} p{5.6cm} p{2.6cm}}
+\toprule
+\normalfont\textbf{Mensaje} & \textbf{Significado} & \textbf{Qué hace MATLAB} & \textbf{Voz} \\
+\midrule
+\endhead
+M + modo & Modo de la tarjeta & Cambia de panel; en práctica envía \cod{L} & ``Modo lectura'' \\
+D + letra & Letra mostrada & Letra gigante en el panel de lectura & La letra \\
+E & Fin de palabra & ``Fin de la palabra. Escribe otra.'' & --- \\
+K + letra & Letra tecleada & \cod{letraEscrita}: agrega al texto & Letra o palabra \\
+T + letra & Letra objetivo & Muestra la letra y ``Letra 3 de 10'' & ``Letra m'' \\
+O c hh mm & Acierto & Verde, marcador, gráfica & ``Correcto'' \\
+X c hh mm & Error & Rojo, marcador, gráfica & ``Incorrecto'' \\
+F hh mm & Fin de sesión & Resultado final con precisión & Resumen \\
+L hh & Letras confirmadas & Lo anota en el registro & --- \\
+S hh mm & Marcador & Lo anota en el registro & --- \\
+!L !U !M & Error & Mensaje de error en el registro & --- \\
+\bottomrule
+\end{longtable}
+
+\subsection{Caso \texttt{'M'}: cambio de modo}
+\begin{lstlisting}[firstnumber=198]
+            case 'M'                                     % modo (switches)
+                mostrarModo(c2);
+                registrar(['La tarjeta esta en modo ' nombreModo(c2)]);
+                hablar(['Modo ' lower(nombreModo(c2))]);
+                if c2 == 'P'
+                    enviarN();          % sesion nueva: decirle cuantas letras
+                end
+\end{lstlisting}
+Ejemplo: llega \cod{MP} $\rightarrow$ muestra el panel de práctica, dice ``modo
+práctica'' y envía \cod{L10} para que la FPGA sepa cuántas letras usar.
+
+\subsection{Caso \texttt{'D'}: letra mostrada (lectura)}
+\begin{lstlisting}[firstnumber=206]
+            case 'D'                                     % lectura
+                lblLetra.Text = upper(c2);
+                lblProg.Text  = 'Avanza con KEY1 (NEXT) en la tarjeta.';
+                hablar(c2);
+\end{lstlisting}
+\cod{upper} la muestra en mayúscula. Ejemplo: \cod{Dh} $\rightarrow$ aparece una
+\textbf{H} grande y la voz dice ``h''.
+
+\subsection{Caso \texttt{'E'}: fin de palabra}
+\begin{lstlisting}[firstnumber=211]
+            case 'E'
+                lblLetra.Text = '-';
+                lblProg.Text  = 'Fin de la palabra. Escribe otra.';
+                registrar('Fin de la palabra.');
+\end{lstlisting}
+
+\subsection{Caso \texttt{'K'}: letra tecleada (escritura)}
+\begin{lstlisting}[firstnumber=216]
+            case 'K'                                     % escritura
+                letraEscrita(c2);
+\end{lstlisting}
+Delega todo a \cod{letraEscrita} (sección~\ref{sec:escritura}).
+
+\subsection{Caso \texttt{'T'}: nueva letra objetivo (práctica)}
+\begin{lstlisting}[firstnumber=219]
+            case 'T'                                     % practica: letra nueva
+                lblObj.Text = upper(c2);
+                lblObj.FontColor = [0 0 0];
+                if nLetras > 0
+                    lblRes.Text = sprintf('Letra %d de %d: escribela en el teclado', ...
+                                          intentos + 1, nLetras);
+                else
+                    lblRes.Text = 'Escribe esta letra en el teclado Braille';
+                end
+                hablar(['Letra ' c2]);
+\end{lstlisting}
+\begin{itemize}
+  \item La letra se pinta en negro (vuelve al color normal después de un acierto o error).
+  \item \cod{sprintf} arma un texto con números: cada \cod{\%d} se reemplaza por un entero.
+        Con \cod{intentos = 2} y \cod{nLetras = 10}: ``Letra 3 de 10''.
+  \item Si \cod{nLetras = 0} (sin límite), no muestra el contador.
+\end{itemize}
+
+\subsection{Caso \texttt{'O'} y \texttt{'X'}: resultado del intento}
+\begin{lstlisting}[firstnumber=230]
+            case {'O', 'X'}                              % practica: resultado
+                ok = (m(1) == 'O');
+                h  = hex2dec(char(m(3:4)));
+                e  = hex2dec(char(m(5:6)));
+                acc = 100 * h / max(1, h + e);
+                intentos = h + e;
+                histAcc(end + 1) = acc;
+                if ok
+                    lblObj.FontColor = [0 0.6 0];
+                    lblRes.Text = 'Correcto!';
+                    hablar('Correcto');
+                else
+                    lblObj.FontColor = [0.8 0 0];
+                    lblRes.Text = sprintf('Incorrecto: escribiste %s', upper(c2));
+                    hablar('Incorrecto');
+                end
+                lblStats.Text = sprintf('Aciertos: %d   Errores: %d   Precision: %.0f %%', h, e, acc);
+                plot(ax, 1:numel(histAcc), histAcc, '-o', 'LineWidth', 1.5);
+                ylim(ax, [0 100]); grid(ax, 'on');
+                registrar(sprintf('%s  (aciertos %d, errores %d)', lblRes.Text, h, e));
+\end{lstlisting}
+
+\begin{longtable}{>{\ttfamily}p{4.4cm} p{9.7cm}}
+\toprule
+\normalfont\textbf{Código} & \textbf{Explicación} \\
+\midrule
+\endhead
+case \{'O', 'X'\} & Un mismo bloque atiende los dos casos. \\
+ok = (m(1) == 'O') & Verdadero si fue acierto. \\
+hex2dec(char(m(3:4))) & Convierte los dígitos hexadecimales en número: \cod{'03'} $\rightarrow$ 3, \cod{'0C'} $\rightarrow$ 12. Es lo contrario de \cod{hexc} en la FPGA. \\
+100 * h / max(1, h + e) & Precisión en porcentaje. \cod{max(1, ...)} evita dividir entre cero. \\
+histAcc(end + 1) = acc & Agrega la precisión al final de la historia. \\
+FontColor = [0 0.6 0] & Verde si acierto; \cod{[0.8 0 0]} rojo si error. \\
+\%.0f \%\% & En \cod{sprintf}: número sin decimales y el símbolo \%. \\
+plot(ax, x, y, '-o') & Redibuja la gráfica: eje X = intento 1, 2, 3\ldots; eje Y = precisión; línea con círculos. \\
+ylim(ax, [0 100]) & Fija el eje Y de 0 a 100 \%. \\
+\bottomrule
+\end{longtable}
+
+\begin{idea}[Reparto de trabajo]
+La FPGA \textbf{cuenta} aciertos y errores (es la que sabe si acertaste). MATLAB
+\textbf{calcula el porcentaje} y \textbf{grafica}, porque dividir con decimales en
+hardware es costoso y en la PC es una línea de código.
+\end{idea}
+
+\subsection{Caso \texttt{'F'}: fin de sesión}
+\begin{lstlisting}[firstnumber=251]
+            case 'F'                                     % practica: fin de sesion
+                h   = hex2dec(char(m(2:3)));
+                e   = hex2dec(char(m(4:5)));
+                acc = 100 * h / max(1, h + e);
+                lblObj.Text = char(10003);
+                lblObj.FontColor = [0 0.4 0.8];
+                lblRes.Text = 'Sesion terminada.  KEY1 (NEXT) = otra sesion';
+                lblStats.Text = sprintf('FINAL  -  Aciertos: %d   Errores: %d   Precision: %.0f %%', h, e, acc);
+                registrar(sprintf('Sesion terminada: aciertos %d, errores %d, precision %.0f %%', h, e, acc));
+                hablar(sprintf('Practica terminada. %d aciertos, %d errores. Precision %.0f por ciento', h, e, acc));
+\end{lstlisting}
+\begin{ojo}
+Aquí los números están en las posiciones \textbf{2--3 y 4--5}, no en 3--4 y 5--6,
+porque el mensaje \cod{F} no lleva letra: \cod{F0802} = 8 aciertos y 2 errores.
+\cod{char(10003)} es el símbolo $\checkmark$.
+\end{ojo}
+
+\subsection{Caso \texttt{'L'}: confirmación de letras por sesión}
+\begin{lstlisting}[firstnumber=262]
+            case 'L'                                     % letras por sesion
+                nLetras = hex2dec(char(m(2:3)));
+                if nLetras == 0
+                    registrar('Practica sin limite de letras.');
+                else
+                    registrar(sprintf('La FPGA hara %d letras por sesion.', nLetras));
+                end
+\end{lstlisting}
+Ejemplo: \cod{L0A} $\rightarrow$ \cod{nLetras = 10}.
+
+\subsection{Caso \texttt{'S'}: marcador}
+\begin{lstlisting}[firstnumber=270]
+            case 'S'
+                if numel(m) >= 5
+                    registrar(sprintf('Marcador FPGA: aciertos %d, errores %d', ...
+                        hex2dec(char(m(2:3))), hex2dec(char(m(4:5)))));
+                end
+\end{lstlisting}
+Revisa que el mensaje tenga al menos 5 caracteres antes de leer las posiciones,
+para no salirse del arreglo si llegara incompleto.
+
+\subsection{Caso \texttt{'!'} y \texttt{otherwise}: errores y mensajes desconocidos}
+\begin{lstlisting}[firstnumber=276]
+            case '!'
+                switch c2
+                    case 'L', registrar('Error: palabra demasiado larga.');
+                    case 'M', registrar('Pon la tarjeta en modo lectura (SW1 SW0 = 01).');
+                    otherwise, registrar(['Error: ' char(m)]);
+                end
+
+            otherwise
+                registrar(['Mensaje: ' char(m)]);
+\end{lstlisting}
+\cod{otherwise} anota cualquier mensaje no reconocido tal cual. Es útil para depurar.
+
+% =====================================================================
+\section{Cambio de panel}
+
+\subsection{\texttt{mostrarModo}}
+\linea{289--306}
+\begin{lstlisting}[firstnumber=289]
+    function mostrarModo(m)
+        modoAct = m;
+        pI.Visible = (m == 'I');
+        pR.Visible = (m == 'R');
+        pW.Visible = (m == 'W');
+        pP.Visible = (m == 'P');
+        lblModo.Text = ['MODO: ' nombreModo(m)];
+        switch m
+            case 'R'
+                lblLetra.Text = '-';
+            case 'P'                                    % la FPGA borra el marcador
+                histAcc = [];
+                intentos = 0;
+                cla(ax); ylim(ax, [0 100]); grid(ax, 'on');
+                lblObj.Text = '-';
+                lblStats.Text = 'Aciertos: 0   Errores: 0   Precision: 0 %';
+        end
+    end
+\end{lstlisting}
+\begin{itemize}
+  \item \cod{(m == 'I')} vale verdadero o falso: solo un panel queda visible.
+  \item Al entrar a práctica reinicia la historia, los intentos y la gráfica
+        (\cod{cla} = \emph{clear axes}), igual que la FPGA reinicia su marcador.
+\end{itemize}
+
+\subsection{\texttt{nombreModo}}
+\linea{308--315}
+Convierte la letra en un nombre legible: \cod{'R'} $\rightarrow$ \cod{'LECTURA'},
+\cod{'W'} $\rightarrow$ \cod{'ESCRITURA'}, \cod{'P'} $\rightarrow$ \cod{'PRACTICA'},
+cualquier otro $\rightarrow$ \cod{'REPOSO'}.
+
+% =====================================================================
+\section{Lo que MATLAB envía}
+
+\subsection{Práctica: \texttt{enviarN} y \texttt{cambiarN}}
+\linea{321--332}
+\begin{lstlisting}[firstnumber=321]
+    function enviarN()
+        nLetras = spnN.Value;
+        enviar("L" + string(spnN.Value));
+    end
+
+    function cambiarN(~, ~)
+        if ~isempty(s) && modoAct == 'P'
+            enviarN();
+        end
+    end
+\end{lstlisting}
+
+\begin{center}
+\begin{tabular}{>{\raggedright}p{6.5cm} >{\raggedright\arraybackslash}p{6.5cm}}
+\toprule
+\textbf{Cuándo se envía \cod{L}} & \textbf{Quién lo dispara} \\
+\midrule
+Al entrar al modo práctica & \cod{case 'M'} con \cod{c2 == 'P'} \\
+Al cambiar el número durante la práctica & \cod{cambiarN} (callback del selector) \\
+\bottomrule
+\end{tabular}
+\end{center}
+Con strings, \cod{"L" + string(10)} produce \cod{"L10"}. \cod{cambiarN} solo envía
+si hay conexión \textbf{y} la tarjeta está en práctica.
+
+\subsection{Lectura: \texttt{enviarPalabra}}
+\linea{338--348}
+\begin{lstlisting}[firstnumber=338]
+    function enviarPalabra(~, ~)
+        w = strtrim(edPal.Value);
+        if isempty(w), return; end
+        if numel(w) > MAX_LEN
+            uialert(fig, sprintf('Maximo %d caracteres.', MAX_LEN), 'Palabra muy larga');
+            return;
+        end
+        registrar(['Enviando palabra: ' w]);
+        hablar(w);
+        enviar("R" + string(w));
+    end
+\end{lstlisting}
+\begin{enumerate}
+  \item \cod{strtrim} quita espacios al inicio y al final.
+  \item Si está vacía, no hace nada.
+  \item Si tiene más de 16 caracteres, avisa con una ventana y \textbf{no la envía}.
+  \item La anota, la dice en voz alta y envía \cod{R} + palabra.
+\end{enumerate}
+\begin{idea}[Doble protección]
+MATLAB revisa el largo antes de enviar para dar un aviso claro. La FPGA también lo
+revisa y responde \cod{!L} por si la palabra llegara desde otro programa.
+\end{idea}
+
+% =====================================================================
+\section{Escritura: \texttt{letraEscrita} y \texttt{borrarTexto}}\label{sec:escritura}
+\linea{354--376}
+
+\begin{lstlisting}[firstnumber=354]
+    function letraEscrita(c)
+        if c == '?'
+            beep;
+            lblUlt.Text = 'Patron no reconocido';
+            return;
+        end
+        if c == ' '
+            if ~isempty(palabraW), hablar(palabraW); end
+            palabraW = '';
+            lblUlt.Text = 'Espacio';
+        else
+            palabraW = [palabraW c];
+            lblUlt.Text = ['Ultima letra: ' upper(c)];
+            hablar(c);
+        end
+        texto = [texto c];
+        taTexto.Value = {texto};
+    end
+\end{lstlisting}
+
+\begin{center}
+\begin{tabular}{l l >{\raggedright\arraybackslash}p{9.5cm}}
+\toprule
+\textbf{Caso} & \textbf{Llega} & \textbf{Qué hace} \\
+\midrule
+Patrón inválido & \cod{K?} & Suena un \cod{beep}, avisa y \textbf{no agrega nada} \\
+Espacio (NEXT) & \cod{K\textvisiblespace} & Lee en voz alta la palabra completa y empieza una nueva \\
+Letra normal & \cod{Ka} & La agrega a la palabra actual y la dice \\
+(todos menos ?) & --- & La agrega al texto total y actualiza la pantalla \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{Ejemplo: teclear ``hola'' y NEXT}
+\begin{center}
+\begin{tabular}{l l l l}
+\toprule
+\textbf{Llega} & \textbf{Voz} & \textbf{\cod{palabraW}} & \textbf{Pantalla} \\
+\midrule
+\cod{Kh} & ``h'' & h & h \\
+\cod{Ko} & ``o'' & ho & ho \\
+\cod{Kl} & ``l'' & hol & hol \\
+\cod{Ka} & ``a'' & hola & hola \\
+\cod{K\textvisiblespace} & ``hola'' & (vacía) & hola\textvisiblespace \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\cod{borrarTexto} (líneas 373--376) vacía \cod{texto}, \cod{palabraW} y el área de
+texto. Solo afecta a la ventana; la FPGA no se entera.
+
+% =====================================================================
+\section{Utilidades}
+
+\subsection{\texttt{registrar}: el historial}
+\linea{382--386}
+\begin{lstlisting}[firstnumber=382]
+    function registrar(txt)
+        linea = sprintf('[%s] %s', char(datetime('now', 'Format', 'HH:mm:ss')), txt);
+        v = [{linea}; taLog.Value(:)];
+        taLog.Value = v(1:min(end, 200));
+    end
+\end{lstlisting}
+\begin{itemize}
+  \item Agrega la hora: \cod{[12:05:33] Conectado a COM5.}
+  \item Pone la línea nueva \textbf{arriba} de las anteriores.
+  \item Conserva solo las últimas \textbf{200} líneas para que no crezca sin límite.
+\end{itemize}
+
+\subsection{\texttt{hablar}: la voz}
+\linea{389--401}
+\begin{lstlisting}[firstnumber=389]
+    function hablar(txt)
+        if ~chkVoz.Value || isempty(txt), return; end
+        try
+            if isempty(synth)
+                NET.addAssembly('System.Speech');
+                synth = System.Speech.Synthesis.SpeechSynthesizer;
+            end
+            synth.SpeakAsyncCancelAll();
+            synth.SpeakAsync(char(txt));
+        catch
+            % Sin voz disponible
+        end
+    end
+\end{lstlisting}
+\begin{longtable}{>{\ttfamily}p{4.6cm} p{9.5cm}}
+\toprule
+\normalfont\textbf{Código} & \textbf{Explicación} \\
+\midrule
+\endhead
+\textasciitilde chkVoz.Value & Si la casilla Voz está apagada, no habla. \\
+NET.addAssembly & Carga la librería de voz integrada en Windows (.NET). \\
+if isempty(synth) & Crea el sintetizador \textbf{una sola vez} y lo reutiliza. \\
+SpeakAsyncCancelAll() & Interrumpe lo que estuviera diciendo, para que no se acumulen frases atrasadas. \\
+SpeakAsync & Habla \textbf{sin congelar} la ventana (asíncrono). \\
+try / catch & En Mac o Linux, o si falla la voz, simplemente no habla. \\
+\bottomrule
+\end{longtable}
+
+\subsection{\texttt{cerrar}: salida limpia}
+\linea{403--409}
+\begin{lstlisting}[firstnumber=403]
+    function cerrar(~, ~)
+        if ~isempty(s)
+            try, configureCallback(s, "off"); catch, end
+            delete(s);
+        end
+        delete(fig);
+    end
+\end{lstlisting}
+\begin{ojo}[¿Por qué es importante?]
+Si el puerto no se libera, queda ocupado: al volver a abrir el programa
+aparecería ``No se pudo abrir el puerto'' hasta reiniciar MATLAB.
+\end{ojo}
+
+% =====================================================================
+\section{Resumen del protocolo desde MATLAB}
+
+\subsection{Lo que MATLAB envía}
+\begin{center}
+\begin{tabular}{>{\ttfamily}l l l >{\raggedright\arraybackslash}p{4.2cm}}
+\toprule
+\normalfont\textbf{Envía} & \textbf{Ejemplo en bytes} & \textbf{Función} & \textbf{Cuándo} \\
+\midrule
+Q & \cod{81 10} & \cod{conectar} & Al conectar \\
+R + palabra & \cod{82 104 111 108 97 10} & \cod{enviarPalabra} & Botón ``Enviar palabra'' \\
+L + número & \cod{76 49 48 10} & \cod{enviarN} & Al entrar a práctica o cambiar el número \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Formato de los mensajes recibidos}
+\begin{center}
+\begin{tabular}{>{\ttfamily}l l >{\raggedright\arraybackslash}p{7.2cm}}
+\toprule
+\normalfont\textbf{Mensaje} & \textbf{Bytes (con \cod{\textbackslash n})} & \textbf{Posiciones que lee MATLAB} \\
+\midrule
+MR & 3 & \cod{c2} = modo \\
+Dh, Ka, Tm & 3 & \cod{c2} = letra \\
+E & 2 & --- \\
+Om0301 / Xk0302 & 7 & \cod{c2} letra, \cod{m(3:4)} aciertos, \cod{m(5:6)} errores \\
+F0802 & 6 & \cod{m(2:3)} aciertos, \cod{m(4:5)} errores \\
+L0A & 4 & \cod{m(2:3)} número \\
+S0C03 & 6 & \cod{m(2:3)} aciertos, \cod{m(4:5)} errores \\
+!L, !U, !M & 3 & \cod{c2} = tipo de error \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% =====================================================================
+\section{Flujos completos por modo}
+
+\subsection{Conexión}
+\begin{longtable}{c p{4.2cm} p{4.6cm} p{4.4cm}}
+\toprule
+\textbf{\#} & \textbf{Usuario} & \textbf{MATLAB} & \textbf{FPGA} \\
+\midrule
+\endhead
+1 & Ejecuta \cod{braille\_gui} & Crea la ventana, panel Reposo & --- \\
+2 & Elige COM5, presiona Conectar & Abre el puerto, envía \cod{Q} & --- \\
+3 & --- & --- & Responde \cod{MI} \\
+4 & --- & \cod{alRecibir} $\rightarrow$ \cod{procesar} $\rightarrow$ panel Reposo & --- \\
+\bottomrule
+\end{longtable}
+
+\subsection{Lectura}
+\begin{longtable}{c p{4.2cm} p{4.6cm} p{4.4cm}}
+\toprule
+\textbf{\#} & \textbf{Usuario} & \textbf{MATLAB} & \textbf{FPGA} \\
+\midrule
+\endhead
+1 & Pone SW = 01 & --- & Envía \cod{MR} \\
+2 & --- & Panel Lectura, dice ``modo lectura'' & --- \\
+3 & Escribe ``hola'', presiona Enviar & Envía \cod{Rhola} & Guarda la palabra, servos con la h \\
+4 & --- & --- & Envía \cod{Dh} \\
+5 & --- & H gigante, dice ``h'' & --- \\
+6 & Presiona NEXT & --- & Servos con la o, envía \cod{Do} \\
+7 & NEXT tras la última letra & ``Fin de la palabra'' & Servos abajo, envía \cod{E} \\
+\bottomrule
+\end{longtable}
+
+\subsection{Escritura}
+\begin{longtable}{c p{4.2cm} p{4.6cm} p{4.4cm}}
+\toprule
+\textbf{\#} & \textbf{Usuario} & \textbf{MATLAB} & \textbf{FPGA} \\
+\midrule
+\endhead
+1 & Pone SW = 10 & Panel Escritura & Envía \cod{MW} \\
+2 & Teclea puntos 1, 2, 5 & Agrega ``h'' y la dice & Reconoce h, envía \cod{Kh} \\
+3 & Teclea un patrón inválido & Beep, ``Patrón no reconocido'' & Envía \cod{K?} \\
+4 & Presiona NEXT & Lee la palabra completa & Envía \cod{K\textvisiblespace} \\
+\bottomrule
+\end{longtable}
+
+\subsection{Práctica}
+\begin{longtable}{c p{4.2cm} p{4.6cm} p{4.4cm}}
+\toprule
+\textbf{\#} & \textbf{Usuario} & \textbf{MATLAB} & \textbf{FPGA} \\
+\midrule
+\endhead
+1 & Pone SW = 11 & --- & Envía \cod{MP}, borra marcador \\
+2 & --- & Panel Práctica, reinicia gráfica, envía \cod{L10} & Responde \cod{L0A} \\
+3 & --- & --- & Elige letra al azar, envía \cod{Tm} \\
+4 & --- & Muestra M, dice ``letra m'' & --- \\
+5 & Teclea la m correctamente & --- & Compara, \cod{hits + 1}, envía \cod{Om0100} \\
+6 & --- & M en verde, ``Correcto'', gráfica en 100 \% & Muestra la respuesta 2 s \\
+7 & (repite hasta 10 letras) & --- & Envía \cod{F0802} \\
+8 & --- & $\checkmark$ azul, resultado final, lo dice & Espera NEXT para otra sesión \\
+\bottomrule
+\end{longtable}
+
+% =====================================================================
+\section{Preguntas frecuentes (para la presentación)}
+
+\begin{pregunta}{¿Por qué casi toda la lógica está en la FPGA y no en MATLAB?}
+Porque el objetivo del proyecto es el hardware: la tarjeta funciona sola (con los
+switches, botones, servos y displays). MATLAB solo agrega pantalla, voz y gráficas.
+Además, así la FPGA siempre es la ``fuente de verdad'': el marcador y el modo no
+pueden quedar desincronizados.
+\end{pregunta}
+
+\begin{pregunta}{¿Cómo sabe MATLAB en qué modo está la tarjeta?}
+No puede ver los switches. Al conectarse envía \cod{Q} y la FPGA responde con
+\cod{M} + modo. Después, cada vez que se mueven los switches, la FPGA envía
+\cod{M} por su cuenta.
+\end{pregunta}
+
+\begin{pregunta}{¿Cómo sabe MATLAB dónde termina un mensaje?}
+Todos los mensajes terminan con el byte 10 (\cod{\textbackslash n}).
+\cod{configureCallback(s, "terminator", @alRecibir)} ejecuta \cod{alRecibir} cada
+vez que llega uno, y esa función corta el buffer en cada byte 10.
+\end{pregunta}
+
+\begin{pregunta}{¿Qué pasa si dos mensajes llegan juntos o uno llega a medias?}
+\cod{alRecibir} usa un buffer propio (\cod{rxbuf}) y un ciclo \cod{while}: procesa
+todos los mensajes completos que haya y deja guardado el pedazo incompleto hasta
+que llegue su \cod{\textbackslash n}.
+\end{pregunta}
+
+\begin{pregunta}{¿Por qué los contadores llegan en hexadecimal?}
+Si se enviara el número como un byte crudo, el valor 10 se confundiría con el
+\cod{\textbackslash n} y cortaría el mensaje. En hexadecimal cada dígito es 0--9 o
+A--F, que nunca valen 10. MATLAB los convierte con \cod{hex2dec}.
+\end{pregunta}
+
+\begin{pregunta}{¿Dónde se calcula la precisión?}
+En MATLAB: \cod{acc = 100 * h / max(1, h + e)}. La FPGA solo cuenta aciertos y
+errores; dividir con decimales en hardware sería costoso.
+\end{pregunta}
+
+\begin{pregunta}{¿Cómo cambia de panel la ventana?}
+Los cuatro paneles están en la misma celda de la cuadrícula. \cod{mostrarModo}
+deja visible solo el del modo actual con \cod{pX.Visible = (m == 'X')}.
+\end{pregunta}
+
+\begin{pregunta}{¿Por qué las funciones pueden usar variables como \texttt{s} sin recibirlas?}
+Porque son \textbf{funciones anidadas} dentro de \cod{braille\_gui}: comparten
+todas sus variables.
+\end{pregunta}
+
+\begin{pregunta}{¿Cómo funciona la voz y por qué no congela la ventana?}
+Usa el sintetizador de Windows (\cod{System.Speech}) mediante .NET. Con
+\cod{SpeakAsync} habla en segundo plano y la ventana sigue respondiendo.
+\cod{SpeakAsyncCancelAll} evita que se acumulen frases atrasadas.
+\end{pregunta}
+
+\begin{pregunta}{¿Qué pasa si el puerto no existe o está ocupado?}
+\cod{serialport} está dentro de un \cod{try/catch}: en lugar de detener el
+programa, se muestra una ventana de error con \cod{uialert}.
+\end{pregunta}
+
+\begin{pregunta}{¿Por qué la ñ funciona?}
+\cod{uint8(char(txt))} convierte cada carácter en un solo byte; la ñ queda como 241
+(Latin-1), que es el valor que la FPGA tiene en su tabla Braille.
+\end{pregunta}
+
+\begin{pregunta}{¿Por qué se valida el largo de la palabra en MATLAB si la FPGA también lo hace?}
+Es doble protección: MATLAB da un aviso claro antes de enviar, y la FPGA responde
+\cod{!L} si una palabra larga llegara desde otro programa.
+\end{pregunta}
+
+\begin{pregunta}{¿Qué hace el programa al cerrarse?}
+\cod{cerrar} apaga el callback y libera el puerto con \cod{delete(s)}. Si no, el
+puerto quedaría ocupado para la siguiente ejecución.
+\end{pregunta}
+
+% =====================================================================
+\appendix
+\section{Índice rápido de funciones}
+\begin{longtable}{>{\ttfamily}p{3cm} p{1.8cm} p{4cm} p{4.2cm}}
+\toprule
+\normalfont\textbf{Función} & \textbf{Líneas} & \textbf{Se ejecuta cuando} & \textbf{Hace} \\
+\midrule
+\endhead
+listaPuertos & 135--138 & Inicio y botón refrescar & Lista los COM disponibles \\
+conectar & 140--164 & Botón Conectar & Abre o cierra el puerto, envía \cod{Q} \\
+enviar & 166--172 & Lo llaman otras funciones & Envía texto + \cod{\textbackslash n} \\
+alRecibir & 175--186 & Llega un \cod{\textbackslash n} & Corta mensajes y llama a \cod{procesar} \\
+procesar & 192--286 & Por cada mensaje & Actualiza la ventana según el tipo \\
+mostrarModo & 289--306 & Mensaje \cod{M} e inicio & Cambia el panel visible \\
+nombreModo & 308--315 & Lo llaman otras funciones & Letra $\rightarrow$ nombre del modo \\
+enviarN & 321--324 & Entrar a práctica & Envía \cod{L} + número \\
+cambiarN & 328--332 & Cambiar el selector & Envía \cod{L} si está en práctica \\
+enviarPalabra & 338--348 & Botón Enviar palabra & Valida y envía \cod{R} + palabra \\
+letraEscrita & 354--371 & Mensaje \cod{K} & Agrega la letra al texto \\
+borrarTexto & 373--376 & Botón Borrar & Limpia el texto \\
+registrar & 382--386 & Lo llaman otras funciones & Anota en el historial con hora \\
+hablar & 389--401 & Lo llaman otras funciones & Voz asíncrona de Windows \\
+cerrar & 403--409 & Cerrar la ventana & Libera el puerto \\
+\bottomrule
+\end{longtable}
+
+\end{document}

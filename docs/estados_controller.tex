@@ -1,0 +1,241 @@
+% =====================================================================
+%  Los 7 estados de braille_controller, explicados uno por uno
+%  Compilar: pdflatex estados_controller.tex  (dos veces)
+% =====================================================================
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noshorthands,es-tabla]{babel}
+\usepackage{lmodern}
+\usepackage{amssymb}
+\usepackage[margin=2cm]{geometry}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{colortbl}
+\usepackage[most]{tcolorbox}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{tinta}{HTML}{13202B}
+\definecolor{verde}{HTML}{137366}
+\definecolor{verdesuave}{HTML}{DCEFEB}
+\definecolor{azul}{HTML}{1F4E9A}
+\definecolor{azulsuave}{HTML}{E1E9F6}
+\definecolor{ambar}{HTML}{9A520C}
+\definecolor{ambarsuave}{HTML}{F8E6D3}
+\definecolor{gris}{HTML}{5B6874}
+\definecolor{filagris}{HTML}{F3F5F6}
+
+\titleformat{\section}{\Large\bfseries\color{tinta}}{\thesection}{0.8em}{}[\vspace{-0.4em}\textcolor{verde}{\rule{\linewidth}{1pt}}]
+\titleformat{\subsection}{\large\bfseries\color{azul}}{}{0em}{}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{gris}Sistema Braille FPGA}
+\fancyhead[R]{\small\color{gris}Estados de \texttt{braille\_controller}}
+\fancyfoot[C]{\small\thepage}
+
+\newcommand{\cod}[1]{\texttt{#1}}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcolumntype{A}{>{\bfseries\raggedright\arraybackslash}p{3.3cm}}
+\renewcommand{\arraystretch}{1.3}
+\setlength{\emergencystretch}{3em}
+
+% Ficha de un estado
+\newenvironment{ficha}{\noindent\rowcolors{2}{filagris}{white}\tabularx{\linewidth}{A L}\toprule
+\rowcolor{azulsuave}\textbf{Aspecto} & \textbf{Detalle} \\ \midrule}{\bottomrule\endtabularx\par\medskip}
+
+\newtcolorbox{idea}[1][Idea clave]{colback=verdesuave,colframe=verde,fonttitle=\bfseries,title=#1,arc=1.5mm,boxrule=0.6pt}
+
+\begin{document}
+
+\begin{center}
+{\color{tinta}\LARGE\bfseries Los 7 estados de \texttt{braille\_controller}}\\[4pt]
+{\color{gris}Qué hace cada estado, cuándo se entra, a dónde va y por qué existe}
+\end{center}
+\vspace{4pt}
+
+\begin{idea}[Cómo leer este documento]
+El controller es una máquina de siete estados que funciona igual en los cuatro modos;
+el modo (\cod{mode}, elegido con SW1--SW0) solo cambia lo que hace cada estado. Primero
+se describe lo que ocurre en todos los ciclos, sin importar el estado, y después hay una
+ficha por estado. Al final está un resumen y un recorrido de ejemplo.
+\end{idea}
+
+% =====================================================================
+\section*{Lo que se ejecuta en cada ciclo (fuera del \texttt{case})}
+\noindent Pasa en todos los ciclos, sin importar en qué estado esté la máquina.
+
+\medskip
+\noindent\rowcolors{2}{filagris}{white}
+\begin{tabularx}{\linewidth}{>{\raggedright}p{3.2cm} >{\ttfamily\raggedright}p{5.8cm} L}
+\toprule
+\rowcolor{azulsuave}\textbf{Qué} & \normalfont\textbf{Código} & \textbf{Para qué} \\
+\midrule
+Bajar los pulsos & line\_ack <= 0; msg\_start <= 0; & Que \cod{line\_ack} y \cod{msg\_start} duren un solo ciclo \\
+Guardar un acorde & if (chord\_valid) chord\_pend <= 1; chord\_reg <= chord; & Que el acorde no se pierda aunque la máquina esté ocupada \\
+Guardar un NEXT & if (next\_pulse) next\_pend <= 1; & Lo mismo, para NEXT \\
+Temporizador de 2 s & fb\_cnt cuenta mientras fb\_wait = 1 & Al terminar, pide otra letra (\cod{need\_target}) o el final (\cod{need\_final}) \\
+Celda en práctica & después del case & Elige respuesta, pista o celda vacía en cada ciclo \\
+\bottomrule
+\end{tabularx}
+
+% =====================================================================
+\section{ST\_IDLE: el que decide}
+
+\begin{ficha}
+Qué es & El estado de espera y el centro de la máquina. Aquí se decide qué hacer. \\
+Cuándo se entra & Al hacer reset, después de cada ST\_GAP y tras el comando \cod{N}. \\
+Qué hace & Revisa los eventos \textbf{en orden de prioridad} y atiende \textbf{solo uno} por vuelta. \\
+Duración & Lo que tarde en llegar un evento (puede ser mucho tiempo). \\
+Por qué existe & Para atender un evento a la vez sin mezclar acciones. \\
+\end{ficha}
+
+\subsection*{Eventos que revisa, en orden}
+\noindent\rowcolors{2}{filagris}{white}
+\begin{tabularx}{\linewidth}{c >{\raggedright}p{3.6cm} L >{\raggedright\arraybackslash}p{2.3cm}}
+\toprule
+\rowcolor{azulsuave}\textbf{\#} & \textbf{Si pasa esto\ldots} & \textbf{Hace esto} & \textbf{Va a} \\
+\midrule
+1 & \cod{line\_ready = 1} (llegó un comando de la PC) & \cod{line\_ack = 1}; copia \cod{cmd\_r}, \cod{len\_r}, \cod{ovf\_r}; si es \cod{R} en lectura, \cod{char\_idx = 0} & ST\_CMD \\
+2 & \cod{sw\_mode} $\neq$ \cod{sw\_last} (movieron los switches) & Cambia \cod{mode}, celda vacía, borra palabra y banderas. En práctica: \cod{hits = misses = 0}, \cod{need\_target = 1}. Prepara \cod{M} + modo & ST\_SEND \\
+3 & \cod{need\_final} en práctica (se acabó la sesión) & \cod{sess\_done = 1}; prepara \cod{F} + aciertos + errores & ST\_SEND \\
+4 & \cod{need\_target} en práctica y sesión activa & \cod{target = new\_char} (la letra del LFSR) & ST\_TARGET \\
+5 & \cod{chord\_pend \&\& !chord\_valid} (hay un acorde) & \textbf{Escritura:} prepara \cod{K} + letra. \textbf{Práctica} con letra esperando: compara (\cod{is\_hit}), suma acierto o error, \cod{fb\_wait = 1}, prepara \cod{O}/\cod{X}. \textbf{Otros casos:} lo ignora & ST\_SEND o se queda \\
+6 & \cod{next\_pend} (presionaron NEXT) & \textbf{Lectura:} siguiente letra, o \cod{E} al final. \textbf{Escritura:} \cod{K} + espacio. \textbf{Práctica:} saltar letra, o sesión nueva si ya terminó & ST\_SHOW, ST\_SEND o se queda \\
+--- & Nada & No hace nada & Se queda \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+\noindent\textbf{¿Por qué este orden?} La PC va primero porque, mientras
+\cod{line\_ready = 1}, el receptor rechaza bytes nuevos: hay que liberarlo pronto. El
+cambio de modo va antes que los acordes para no interpretar un acorde con las reglas del
+modo anterior.
+
+% =====================================================================
+\section{ST\_CMD: ejecuta el comando de la PC}
+
+\begin{ficha}
+Qué es & El estado que interpreta la letra del comando (\cod{cmd\_r}). \\
+Cuándo se entra & Desde ST\_IDLE, cuando llegó una línea completa. \\
+Qué lee & \cod{cmd\_r}, \cod{len\_r}, \cod{ovf\_r}, \cod{mode} y \cod{buf\_rdata} (casilla 0 del buffer). \\
+Duración & 1 ciclo. \\
+Por qué existe & Separa ``recibir'' (ST\_IDLE) de ``ejecutar''. Además, en este ciclo el buffer ya muestra la casilla 0, que necesitan \cod{R} y \cod{L}. \\
+\end{ficha}
+
+\subsection*{Qué hace con cada comando}
+\noindent\rowcolors{2}{filagris}{white}
+\begin{tabularx}{\linewidth}{>{\ttfamily}c >{\raggedright}p{3.4cm} L >{\raggedright}p{2.3cm} >{\raggedright\arraybackslash}p{2cm}}
+\toprule
+\rowcolor{azulsuave}\normalfont\textbf{Cmd} & \textbf{Condición} & \textbf{Acción} & \textbf{Responde} & \textbf{Va a} \\
+\midrule
+R & No está en lectura & --- & \cod{!M} & ST\_SEND \\
+R & Hubo overflow (más de 16) & Borra palabra, celda vacía & \cod{!L} & ST\_SEND \\
+R & Largo 0 & --- & \cod{!U} & ST\_SEND \\
+R & Todo bien & \cod{word\_len = len\_r} & (lo envía ST\_SHOW) & \textbf{ST\_SHOW} \\
+L & Largo 0, mayor que 2, o no es dígito & --- & \cod{!U} & ST\_SEND \\
+L & 1 dígito & \cod{rounds\_cfg = dígito} & \cod{L0d} (ej. \cod{L05}) & ST\_SEND \\
+L & 2 dígitos & \cod{dig0 = primer dígito} & (lo envía ST\_LDIG2) & \textbf{ST\_LDIG2} \\
+Q & --- & --- & \cod{M} + modo & ST\_SEND \\
+S & --- & --- & \cod{S} + aciertos + errores & ST\_SEND \\
+C & --- & \cod{hits = misses = 0} & \cod{S0000} & ST\_SEND \\
+N & --- & \cod{next\_pend = 1} (como presionar NEXT) & ninguna & \textbf{ST\_IDLE} \\
+\normalfont Otro & --- & --- & \cod{!U} & ST\_SEND \\
+\bottomrule
+\end{tabularx}
+
+% =====================================================================
+\section{ST\_LDIG2: el segundo dígito de \texttt{L}}
+
+\begin{ficha}
+Qué es & Un paso extra solo para \cod{L} con dos dígitos (por ejemplo \cod{L10}). \\
+Cuándo se entra & Desde ST\_CMD, si el comando \cod{L} trae 2 caracteres. \\
+Qué hace & Lee la \textbf{casilla 1} del buffer (\cod{buf\_raddr = 1} en este estado). Si es dígito: \cod{rounds\_cfg = dig0 $\times$ 10 + dígito} y prepara \cod{L} + número en hex. Si no: \cod{!U}. \\
+Ejemplo & \cod{L10} $\to$ $1 \times 10 + 0 = 10$ $\to$ responde \cod{L0A}. \\
+Duración & 1 ciclo. \\
+Va a & ST\_SEND. \\
+Por qué existe & El buffer tiene un solo puerto de lectura: en ST\_CMD se leyó la casilla 0 y hace falta otro ciclo para leer la casilla 1. \\
+\end{ficha}
+
+% =====================================================================
+\section{ST\_SHOW: pone la letra en los servos}
+
+\begin{ficha}
+Qué es & El estado que muestra en la celda la letra actual de la palabra (modo lectura). \\
+Cuándo se entra & Desde ST\_CMD (\cod{R} válido, primera letra) o desde ST\_IDLE (NEXT con letras pendientes). \\
+Qué lee & \cod{buf\_rdata} = la letra de la casilla \cod{char\_idx}, y \cod{lut\_pattern} / \cod{lut\_valid} de \cod{ascii\_to\_braille}. \\
+Qué hace & \cod{cell\_pattern = lut\_pattern} (o \cod{000000} si la letra no tiene Braille) y prepara \cod{D} + letra. \\
+Ejemplo & \cod{char\_idx = 0}, buffer = ``hola'' $\to$ letra \cod{'h'} $\to$ \cod{cell\_pattern = 010011} $\to$ mensaje \cod{Dh}. \\
+Duración & 1 ciclo. \\
+Va a & ST\_SEND. \\
+Por qué existe & Junta en un solo lugar ``mostrar la letra y avisar a MATLAB'', tanto para la primera letra como para cada NEXT. \\
+\end{ficha}
+
+% =====================================================================
+\section{ST\_TARGET: anuncia la letra de práctica}
+
+\begin{ficha}
+Qué es & El estado que activa la espera de respuesta en modo práctica. \\
+Cuándo se entra & Desde ST\_IDLE, después de que el LFSR eligió la letra (\cod{target = new\_char}). \\
+Qué hace & \cod{target\_valid = 1} (desde ahora cuenta lo que teclees) y prepara \cod{T} + letra. \\
+Ejemplo & \cod{target = 'm'} $\to$ mensaje \cod{Tm}. \\
+Duración & 1 ciclo. \\
+Va a & ST\_SEND. \\
+Por qué existe & Separa ``elegir la letra'' de ``activarla y anunciarla'', así el mensaje sale con la letra ya guardada en \cod{target}. \\
+\end{ficha}
+
+% =====================================================================
+\section{ST\_SEND: espera turno para enviar}
+
+\begin{ficha}
+Qué es & El estado que entrega el mensaje preparado (\cod{msg\_data}, \cod{msg\_len}) a \cod{msg\_tx}. \\
+Cuándo se entra & Desde casi todos los demás estados, porque casi todo genera una respuesta. \\
+Qué lee & \cod{msg\_busy} (¿\cod{msg\_tx} está enviando otro mensaje?). \\
+Qué hace & Si \cod{msg\_busy = 1}, \textbf{espera} aquí. Si \cod{msg\_busy = 0}, da el pulso \cod{msg\_start = 1}. \\
+Duración & 1 ciclo si el transmisor está libre; si está ocupado, hasta unos 7 ms. \\
+Va a & ST\_GAP. \\
+Por qué existe & Para no mandar un mensaje encima de otro que todavía está saliendo. \\
+\end{ficha}
+
+% =====================================================================
+\section{ST\_GAP: un ciclo de pausa}
+
+\begin{ficha}
+Qué es & Una pausa de 1 ciclo después de enviar. \\
+Cuándo se entra & Siempre después de ST\_SEND. \\
+Qué hace & Nada, solo cambia a ST\_IDLE. \\
+Duración & 1 ciclo (20 ns). \\
+Va a & ST\_IDLE. \\
+Por qué existe & \cod{msg\_busy} es un registro de \cod{msg\_tx}: sube \textbf{un ciclo después} de \cod{msg\_start}. Sin ST\_GAP, el controller podría volver a ST\_IDLE, preparar otro mensaje y ver \cod{msg\_busy} todavía en 0. Entonces daría otro \cod{msg\_start} mientras \cod{msg\_tx} ya está ocupado, y ese mensaje se perdería. \\
+\end{ficha}
+
+% =====================================================================
+\section{Resumen}
+
+\noindent\rowcolors{2}{filagris}{white}
+\begin{tabularx}{\linewidth}{>{\bfseries}l L c >{\raggedright\arraybackslash}p{4.2cm}}
+\toprule
+\rowcolor{azulsuave}\textbf{Estado} & \textbf{En una frase} & \textbf{Ciclos} & \textbf{Siguiente} \\
+\midrule
+ST\_IDLE & Decide qué evento atender & variable & CMD, SHOW, TARGET, SEND \\
+ST\_CMD & Ejecuta el comando de la PC & 1 & SEND, SHOW, LDIG2, IDLE \\
+ST\_LDIG2 & Lee el 2.º dígito de \cod{L} & 1 & SEND \\
+ST\_SHOW & Pone la letra en los servos & 1 & SEND \\
+ST\_TARGET & Activa y anuncia la letra de práctica & 1 & SEND \\
+ST\_SEND & Espera que \cod{msg\_tx} esté libre y envía & 1 o más & GAP \\
+ST\_GAP & Pausa de 1 ciclo & 1 & IDLE \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+\begin{idea}[Ejemplo de recorrido completo]
+MATLAB manda \cod{Rhola} $\to$ \textbf{ST\_IDLE} (toma la línea) $\to$ \textbf{ST\_CMD}
+(valida \cod{R}) $\to$ \textbf{ST\_SHOW} (pone la \cod{h} en los servos) $\to$
+\textbf{ST\_SEND} (envía \cod{Dh}) $\to$ \textbf{ST\_GAP} $\to$ \textbf{ST\_IDLE}.
+Son 5 ciclos, unos 100 ns.
+\end{idea}
+
+\end{document}

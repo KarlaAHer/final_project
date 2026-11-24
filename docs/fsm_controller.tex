@@ -1,0 +1,101 @@
+% =====================================================================
+%  Maquina de estados de braille_controller
+%  Compilar: pdflatex fsm_controller.tex
+% =====================================================================
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noshorthands]{babel}
+\usepackage{lmodern}
+\usepackage[a4paper,landscape,margin=1.6cm]{geometry}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,calc}
+\pagestyle{empty}
+
+\definecolor{tinta}{HTML}{13202B}
+\definecolor{verde}{HTML}{137366}
+\definecolor{azul}{HTML}{1F4E9A}
+\definecolor{azulsuave}{HTML}{E1E9F6}
+\definecolor{ambar}{HTML}{9A520C}
+\definecolor{ambarsuave}{HTML}{F8E6D3}
+\definecolor{gris}{HTML}{5B6874}
+
+\tikzset{
+  >=Stealth,
+  st/.style={rectangle,rounded corners=6pt,draw=azul,very thick,fill=azulsuave,
+             minimum width=3.2cm,minimum height=1.25cm,align=center,font=\small},
+  sti/.style={st,draw=tinta,fill=tinta,text=white},
+  sts/.style={st,draw=ambar,fill=ambarsuave},
+  lab/.style={font=\scriptsize,align=center,fill=white,inner sep=1.5pt},
+  tr/.style={->,thick,draw=gris}
+}
+\newcommand{\nom}[2]{\textbf{\texttt{#1}}\\[-1pt]{\scriptsize #2}}
+
+\begin{document}
+\begin{center}
+{\color{tinta}\LARGE\bfseries Máquina de estados de \texttt{braille\_controller}}\\[3pt]
+{\color{gris}Sistema bidireccional Texto $\leftrightarrow$ Braille \textendash{} DE10-Lite}
+\end{center}
+\vspace{2pt}
+
+\begin{center}
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}
+% ---------------- Estados ----------------
+\node[sti] (I) at (-2.2,0)    {\nom{ST\_IDLE}{atiende un evento a la vez}};
+\node[st]  (C) at (6,3.6)  {\nom{ST\_CMD}{ejecuta el comando de la PC}};
+\node[st]  (L) at (12.5,3.6) {\nom{ST\_LDIG2}{lee el 2.º dígito de L}};
+\node[st]  (S) at (6,0)    {\nom{ST\_SHOW}{letra del buffer a los servos}};
+\node[st]  (T) at (6,-3.6) {\nom{ST\_TARGET}{anuncia la letra de práctica}};
+\node[sts] (N) at (18.5,0) {\nom{ST\_SEND}{espera que msg\_tx esté libre}};
+\node[sts] (G) at (18.5,-3.6) {\nom{ST\_GAP}{espera 1 ciclo}};
+
+% reset
+\draw[tr,<-] (I.west) -- ++(-1.3,0) node[left,font=\scriptsize,align=center]{reset\\(KEY0)};
+
+% ---------------- Desde ST_IDLE ----------------
+\draw[tr] (I.north east) -- node[lab,sloped,pos=0.58]{line\_ready: ack, copia cmd/len/ovf} (C.west);
+\draw[tr] (I) -- node[lab,pos=0.55]{NEXT en lectura y\\quedan letras: char\_idx + 1} (S);
+\draw[tr] (I.south east) -- node[lab,sloped,pos=0.58]{need\_target (práctica): LFSR} (T.west);
+\draw[tr] (I) edge[loop below,looseness=6] node[lab,below]{sin eventos} (I);
+\draw[tr] (I.north) -- ++(0,5.2) -| node[lab,pos=0.25]{cambio de switches (\texttt{M}) \quad fin de sesión (\texttt{F}) \quad acorde (\texttt{K}, \texttt{O}, \texttt{X}) \quad NEXT (\texttt{E}, \texttt{K}\,espacio, \texttt{MP})} (N.north);
+
+% ---------------- Desde ST_CMD ----------------
+\draw[tr] (C) -- node[lab]{L con 2 dígitos} (L);
+\draw[tr] (C) -- node[lab]{R válido:\\word\_len = len} (S);
+\draw[tr] (C.south east) to[out=-20,in=160] node[lab,pos=0.55]{Q, S, C, L de 1 dígito,\\errores \texttt{!M} \texttt{!L} \texttt{!U}} (N.north west);
+\draw[tr] (C.north west) to[out=170,in=90] node[lab,pos=0.5]{N: marca next\_pend\\(sin respuesta)} (I.north);
+
+% ---------------- Hacia ST_SEND ----------------
+\draw[tr] (L.south east) -- node[lab,sloped]{\texttt{L}hh o \texttt{!U}} (N.north west);
+\draw[tr] (S) -- node[lab]{mensaje \texttt{D} + letra} (N);
+\draw[tr] (T.east) to[out=0,in=-160] node[lab,pos=0.45]{target\_valid = 1\\mensaje \texttt{T} + letra} (N.south west);
+
+% ---------------- ST_SEND / ST_GAP ----------------
+\draw[tr] (N) edge[loop right,looseness=5] node[lab,right]{msg\_busy = 1} (N);
+\draw[tr] (N) -- node[lab]{msg\_busy = 0:\\msg\_start} (G);
+\draw[tr] (G.south) -- ++(0,-1.4) -| node[lab,pos=0.25]{al siguiente ciclo (msg\_busy ya subió)} (I.south);
+\end{tikzpicture}}
+\end{center}
+
+\vspace{4pt}
+\noindent\textbf{\color{tinta}Explicación.}
+El controller es una máquina de siete estados codificados en 3 bits que funciona igual
+en los cuatro modos; el modo (\texttt{mode}, elegido con SW1--SW0) solo cambia lo que
+hace cada estado. En \textbf{ST\_IDLE} revisa los eventos en orden de prioridad y atiende
+\emph{uno por vuelta}: primero una línea de la PC (va a \textbf{ST\_CMD}), luego un cambio
+de switches, el fin de una sesión de práctica, la necesidad de una letra nueva (va a
+\textbf{ST\_TARGET}), un acorde tecleado y, al final, el botón NEXT (en lectura va a
+\textbf{ST\_SHOW}). Los acordes y NEXT se guardan como pendientes fuera de la máquina,
+así no se pierden aunque esté ocupada. \textbf{ST\_CMD} valida y ejecuta el comando;
+para \texttt{L} de dos dígitos pasa por \textbf{ST\_LDIG2} para leer la segunda casilla
+del buffer. \textbf{ST\_SHOW} convierte la letra actual con \texttt{ascii\_to\_braille} y la
+pone en los servos, y \textbf{ST\_TARGET} activa la espera de respuesta en práctica. Casi
+todos los caminos terminan en \textbf{ST\_SEND}, porque casi todo genera un mensaje para
+MATLAB: ahí espera a que \texttt{msg\_tx} esté libre (\texttt{msg\_busy = 0}) y da el pulso
+\texttt{msg\_start}. \textbf{ST\_GAP} añade un ciclo antes de volver a ST\_IDLE, porque
+\texttt{msg\_busy} tarda un ciclo en subir; sin él, el controller podría ver el transmisor
+todavía libre y disparar otro mensaje encima, que se perdería.
+
+\end{document}

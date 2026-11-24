@@ -1,0 +1,90 @@
+% =====================================================================
+%  Tabla de comandos del protocolo UART
+%  Compilar: pdflatex comandos.tex
+% =====================================================================
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noshorthands,es-tabla]{babel}
+\usepackage{lmodern}
+\usepackage[margin=1.5cm]{geometry}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{colortbl}
+\usepackage[most]{tcolorbox}
+\pagestyle{empty}
+
+\definecolor{tinta}{HTML}{13202B}
+\definecolor{verde}{HTML}{137366}
+\definecolor{verdesuave}{HTML}{DCEFEB}
+\definecolor{ambar}{HTML}{9A520C}
+\definecolor{ambarsuave}{HTML}{F8E6D3}
+\definecolor{gris}{HTML}{5B6874}
+\definecolor{filagris}{HTML}{F3F5F6}
+
+\newcommand{\cod}[1]{\texttt{#1}}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\renewcommand{\arraystretch}{1.22}
+
+\begin{document}
+
+\begin{center}
+{\color{tinta}\LARGE\bfseries Comandos del protocolo UART}\\[3pt]
+{\color{gris}Sistema bidireccional Texto $\leftrightarrow$ Braille \textendash{} DE10-Lite}
+\end{center}
+\vspace{6pt}
+
+% ---------------------------------------------------------------------
+\noindent{\color{verde}\Large\bfseries PC $\rightarrow$ FPGA}\hfill{\small\color{gris}lo que manda MATLAB}\par
+\vspace{4pt}
+\noindent\rowcolors{2}{filagris}{white}
+\begin{tabularx}{\linewidth}{>{\ttfamily\bfseries\large}c >{\raggedright}p{2.2cm} L >{\ttfamily}p{1.6cm} >{\ttfamily\raggedright}p{1.7cm} >{\raggedright\arraybackslash}p{2.3cm}}
+\toprule
+\rowcolor{verdesuave}\normalfont\normalsize\textbf{Cmd} & \textbf{Viene de} & \textbf{Significa} & \normalfont\textbf{Ejemplo} & \normalfont\textbf{Responde} & \textbf{¿MATLAB?} \\
+\midrule
+R & \textit{Read} (leer) & Muestra esta palabra en la celda (solo en modo lectura) & Rhola & Dh & Sí: botón Enviar \\
+L & \textit{Letras} & Cada sesión de práctica tendrá $n$ letras (0--99; 0 = sin límite) & L10 & L0A & Sí: selector \\
+Q & \textit{Query} (preguntar) & ¿En qué modo estás? & Q & MR & Sí: al conectar \\
+S & \textit{Score} (marcador) & ¿Cuántos aciertos y errores llevo? & S & S0C03 & No: pruebas \\
+C & \textit{Clear} (borrar) & Pon el marcador en cero & C & S0000 & No: pruebas \\
+N & \textit{Next} (siguiente) & Haz como si presionara NEXT & N & \normalfont igual que el botón & No: pruebas \\
+\bottomrule
+\end{tabularx}
+
+\vspace{8pt}
+% ---------------------------------------------------------------------
+\noindent{\color{ambar}\Large\bfseries FPGA $\rightarrow$ PC}\hfill{\small\color{gris}lo que manda la tarjeta}\par
+\vspace{4pt}
+\noindent\rowcolors{2}{filagris}{white}
+\begin{tabularx}{\linewidth}{>{\ttfamily\bfseries\large}c >{\raggedright}p{2.6cm} L >{\ttfamily}p{1.8cm}}
+\toprule
+\rowcolor{ambarsuave}\normalfont\normalsize\textbf{Msg} & \textbf{Viene de} & \textbf{Significa} & \normalfont\textbf{Ejemplo} \\
+\midrule
+M & \textit{Modo} & Modo actual: \cod{I} reposo, \cod{R} lectura, \cod{W} escritura, \cod{P} práctica & MR \\
+D & \textit{Display} (mostrar) & Estoy mostrando esta letra en la celda & Dh \\
+E & \textit{End} (fin) & Se acabó la palabra & E \\
+K & \textit{Key} (tecla) & Tecleaste esta letra (\cod{?} = patrón inválido, espacio = NEXT) & Ka \\
+T & \textit{Target} (objetivo) & Escribe esta letra (práctica) & Tm \\
+O & \textit{OK} & Acierto: letra tecleada, aciertos, errores & Om0301 \\
+X & (una X de ``mal'') & Error: letra tecleada, aciertos, errores & Xk0302 \\
+F & \textit{Fin} & Sesión terminada: aciertos y errores finales & F0802 \\
+L & \textit{Letras} & Confirma cuántas letras por sesión & L0A \\
+S & \textit{Score} & Marcador & S0C03 \\
+!L & \textit{Largo} & Error: palabra de más de 16 letras & !L \\
+!U & \textit{Unknown} (desconocido) & Error: comando que no existe o mal escrito & !U \\
+!M & \textit{Modo} & Error: mandaste \cod{R} sin estar en modo lectura & !M \\
+\bottomrule
+\end{tabularx}
+
+\vspace{8pt}
+\begin{tcolorbox}[colback=verdesuave,colframe=verde,arc=1.5mm,boxrule=0.6pt,title=\bfseries Recuerda,fonttitle=\small]
+\begin{itemize}\setlength{\itemsep}{1pt}
+  \item Todos los mensajes, en las dos direcciones, terminan con Enter (\cod{\textbackslash n}, byte 10).
+  \item Los aciertos y errores van en \textbf{hexadecimal de 2 dígitos}: \cod{0C} = 12. Así nunca se confunden con el \cod{\textbackslash n}.
+  \item Cómo leer \cod{Om0301}: \cod{O} = acierto, \cod{m} = letra tecleada, \cod{03} = 3 aciertos, \cod{01} = 1 error.
+\end{itemize}
+\end{tcolorbox}
+
+\end{document}
